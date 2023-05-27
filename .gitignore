@@ -53,3 +53,5 @@ cdk.out
 
 config.json
 gpio
+
+.vscode
