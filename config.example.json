@@ -1,0 +1,11 @@
+{
+    "basePath": "/sys/class/gpio",
+    "pinsToWatch": {
+        "1": {
+            "name": "Furnace"
+        },
+        "2": {
+            "name": "Heatpump"
+        }
+    }
+}
