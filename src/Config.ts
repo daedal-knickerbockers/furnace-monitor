@@ -1,37 +1,71 @@
-import Ajv, { JSONSchemaType } from "ajv";
+import Ajv, { ErrorObject, JSONSchemaType } from "ajv";
 import fs from "fs";
 
-export type PinConfig = {
-    name: string;
-};
+export interface ConsumerConfig {
+    gpio: number;
+}
+
+export interface DatabaseConfig {
+    localDatabase: {
+        filePath: string;
+    };
+    remoteDatabase: {
+        keyPath: string;
+    };
+}
 
 export type Config = {
-    basePath: string;
-    pinsToWatch: Record<number, PinConfig>;
+    localConfigDirPath: string;
+    gpioBasePath?: string;
+    consumers: Record<string, ConsumerConfig>;
+    database: DatabaseConfig;
 };
 
-const PinConfigSchema: JSONSchemaType<PinConfig> = {
+const ConsumerConfigSchema: JSONSchemaType<ConsumerConfig> = {
     type: "object",
     properties: {
-        name: { type: "string" },
+        gpio: { type: "number" },
     },
-    required: ["name"],
+    required: ["gpio"],
+    additionalProperties: false,
+} as const;
+
+const DatabaseConfigSchema: JSONSchemaType<DatabaseConfig> = {
+    type: "object",
+    properties: {
+        localDatabase: {
+            type: "object",
+            properties: {
+                filePath: { type: "string" },
+            },
+            required: ["filePath"],
+            additionalProperties: false,
+        },
+        remoteDatabase: {
+            type: "object",
+            properties: {
+                keyPath: { type: "string" },
+            },
+            required: ["keyPath"],
+            additionalProperties: false,
+        },
+    },
+    required: ["localDatabase", "remoteDatabase"],
     additionalProperties: false,
 } as const;
 
 const ConfigSchema = {
     type: "object",
     properties: {
-        basePath: { type: "string" },
-        pinsToWatch: {
+        localConfigDirPath: { type: "string" },
+        gpioBasePath: { type: "string" },
+        consumers: {
             type: "object",
-            patternProperties: {
-                "^[0-9]+$": PinConfigSchema,
-            },
-            additionalProperties: false,
+            additionalProperties: ConsumerConfigSchema,
         },
+        database: DatabaseConfigSchema,
     },
-    required: ["pinsToWatch"],
+    required: ["localConfigDirPath", "consumers", "database"],
     additionalProperties: false,
 } as const;
 
@@ -39,13 +73,19 @@ const validateConfig = new Ajv({
     allErrors: true,
 }).compile<Config>(ConfigSchema);
 
+export class InvalidConfigError extends Error {
+    public constructor(public readonly validationErrors: ErrorObject[]) {
+        super(`Invalid config`);
+    }
+}
+
 export class ConfigLoader {
     public static fromFile(filePath: string): Readonly<Config> {
         const file = fs.readFileSync(filePath, "utf-8");
         const parsedContent: unknown = JSON.parse(file);
         if (!validateConfig(parsedContent)) {
-            const validationErrors = validateConfig.errors?.map((e) => e.message) ?? [];
-            throw new Error(`Invalid config file: ${validationErrors.join(", ")}`);
+            const validationErrors = validateConfig.errors ?? [];
+            throw new InvalidConfigError(validationErrors);
         }
         return Object.freeze(parsedContent);
     }

@@ -1,11 +1,20 @@
 {
-    "basePath": "/sys/class/gpio",
-    "pinsToWatch": {
-        "1": {
-            "name": "Furnace"
+    "localConfigDirPath": "/var/lib/furnace-monitor",
+    "gpioBasePath": "/sys/class/gpio",
+    "consumers": {
+        "Furnace": {
+            "gpio": 1
         },
-        "2": {
-            "name": "Heatpump"
+        "Heatpump": {
+            "gpio": 2
+        }
+    },
+    "database": {
+        "localDatabase": {
+            "filePath": "/var/lib/furnace-monitor/database.sqlite"
+        },
+        "remoteDatabase": {
+            "keyPath": "path/to/my/gcp-key-file.json"
         }
     }
 }
