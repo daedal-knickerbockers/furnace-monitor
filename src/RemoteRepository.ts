@@ -5,6 +5,12 @@ import path from "path";
 
 interface Config {
     spreadsheetId: string;
+    spreadsheetUrl: string;
+}
+
+interface InitSpreadsheetResult {
+    spreadsheetId: string;
+    spreadsheetUrl: string;
 }
 
 export class LocalConfigError extends Error {
@@ -47,7 +53,7 @@ export class RemoteRepository {
      * Initialises the remote repository to work with the google sheets api
      * @throws InvalidKeyError if no valid key could be found
      */
-    public async init(): Promise<void> {
+    public async init(): Promise<Config> {
         const auth = new google.auth.GoogleAuth({
             keyFile: this.keyPath,
             scopes: [
@@ -78,12 +84,14 @@ export class RemoteRepository {
 
         const config = await this.loadLocalConfig();
         if (!config) {
-            const spreadsheetId = await this.initSpreadsheet();
-            this.config = await this.initLocalConfig(spreadsheetId);
+            const { spreadsheetId, spreadsheetUrl } = await this.initSpreadsheet();
+            this.config = await this.initLocalConfig(spreadsheetId, spreadsheetUrl);
         } else {
             this.config = config;
             await this.checkSpreadsheetAccess(this.config.spreadsheetId);
         }
+
+        return this.config;
     }
 
     private async loadLocalConfig(): Promise<Config | undefined> {
@@ -100,9 +108,10 @@ export class RemoteRepository {
         return result;
     }
 
-    private async initLocalConfig(spreadsheetId: string): Promise<Config> {
+    private async initLocalConfig(spreadsheetId: string, spreadsheetUrl: string): Promise<Config> {
         const config: Config = {
             spreadsheetId,
+            spreadsheetUrl,
         };
         const localConfigFilePath = path.join(this.localConfigDirPath, RemoteRepository.CONFIG_FILE_NAME);
         try {
@@ -114,14 +123,20 @@ export class RemoteRepository {
         return config;
     }
 
-    private async initSpreadsheet(): Promise<string> {
-        let spreadsheetId: string;
+    private async initSpreadsheet(): Promise<InitSpreadsheetResult> {
+        let result: InitSpreadsheetResult;
         try {
             const createSpreadsheetResponse = await this.sheets.spreadsheets.create();
             if (!createSpreadsheetResponse.data.spreadsheetId) {
                 throw new CreateSpreadsheetError(undefined, "Did not receive spreadsheetId in response");
             }
-            spreadsheetId = createSpreadsheetResponse.data.spreadsheetId;
+            if (!createSpreadsheetResponse.data.spreadsheetUrl) {
+                throw new CreateSpreadsheetError(undefined, "Did not receive spreadsheetUrl in response");
+            }
+            result = {
+                spreadsheetId: createSpreadsheetResponse.data.spreadsheetId,
+                spreadsheetUrl: createSpreadsheetResponse.data.spreadsheetUrl,
+            };
         } catch (error) {
             if ((error as GaxiosError).response) {
                 const gaxiosError = error as GaxiosError;
@@ -135,7 +150,7 @@ export class RemoteRepository {
                 throw new CreateSpreadsheetError(undefined, error);
             }
         }
-        return spreadsheetId;
+        return result;
     }
 
     private async checkSpreadsheetAccess(spreadsheetId: string): Promise<void> {

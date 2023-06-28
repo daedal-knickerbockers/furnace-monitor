@@ -1,4 +1,5 @@
 {
+    "logLevel": "info",
     "localConfigDirPath": "/var/lib/furnace-monitor",
     "gpioBasePath": "/sys/class/gpio",
     "consumers": {

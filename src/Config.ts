@@ -1,5 +1,7 @@
-import Ajv, { ErrorObject, JSONSchemaType } from "ajv";
+import { ErrorObject } from "ajv";
+import Ajv, { JTDSchemaType } from "ajv/dist/jtd";
 import fs from "fs";
+import { LogLevelNames } from "loglevel";
 
 export interface ConsumerConfig {
     gpio: number;
@@ -14,63 +16,53 @@ export interface DatabaseConfig {
     };
 }
 
-export type Config = {
+export interface Config {
+    /** Defaults to "info" */
+    logLevel?: LogLevelNames;
     localConfigDirPath: string;
     gpioBasePath?: string;
     consumers: Record<string, ConsumerConfig>;
     database: DatabaseConfig;
+}
+
+const ConsumerConfigSchema: JTDSchemaType<ConsumerConfig> = {
+    properties: {
+        gpio: { type: "uint8" },
+    },
 };
 
-const ConsumerConfigSchema: JSONSchemaType<ConsumerConfig> = {
-    type: "object",
-    properties: {
-        gpio: { type: "number" },
-    },
-    required: ["gpio"],
-    additionalProperties: false,
-} as const;
-
-const DatabaseConfigSchema: JSONSchemaType<DatabaseConfig> = {
-    type: "object",
+const DatabaseConfigSchema: JTDSchemaType<DatabaseConfig> = {
     properties: {
         localDatabase: {
-            type: "object",
             properties: {
                 filePath: { type: "string" },
             },
-            required: ["filePath"],
-            additionalProperties: false,
         },
         remoteDatabase: {
-            type: "object",
             properties: {
                 keyPath: { type: "string" },
             },
-            required: ["keyPath"],
-            additionalProperties: false,
         },
     },
-    required: ["localDatabase", "remoteDatabase"],
-    additionalProperties: false,
-} as const;
+};
 
-const ConfigSchema = {
-    type: "object",
+const ConfigSchema: JTDSchemaType<Config> = {
     properties: {
         localConfigDirPath: { type: "string" },
-        gpioBasePath: { type: "string" },
         consumers: {
-            type: "object",
-            additionalProperties: ConsumerConfigSchema,
+            values: ConsumerConfigSchema,
         },
         database: DatabaseConfigSchema,
     },
-    required: ["localConfigDirPath", "consumers", "database"],
-    additionalProperties: false,
-} as const;
+    optionalProperties: {
+        logLevel: { enum: ["trace", "debug", "info", "warn", "error"] },
+        gpioBasePath: { type: "string" },
+    },
+};
 
 const validateConfig = new Ajv({
     allErrors: true,
+    jtd: true,
 }).compile<Config>(ConfigSchema);
 
 export class InvalidConfigError extends Error {

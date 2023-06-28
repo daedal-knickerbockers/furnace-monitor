@@ -1,3 +1,4 @@
+import log from "loglevel";
 import { Args } from "./Args";
 import { ConfigLoader } from "./Config";
 import { Consumer } from "./Consumer";
@@ -11,11 +12,14 @@ async function main(): Promise<void> {
     const config = ConfigLoader.fromFile(configFilePath);
     const gpio = new Gpio(config.gpioBasePath);
 
+    log.setLevel(config.logLevel || "info");
+
     const localRepository = new LocalRepository(config.database.localDatabase.filePath);
     await localRepository.init();
 
     const remoteRepository = new RemoteRepository(config.database.remoteDatabase.keyPath, config.localConfigDirPath);
-    await remoteRepository.init();
+    const remoteRepositoryConfig = await remoteRepository.init();
+    log.info("Remote repository config", remoteRepositoryConfig);
 
     for (const [consumerName, consumerConfig] of Object.entries(config.consumers)) {
         const consumer = new Consumer(consumerName, consumerConfig, localRepository, gpio);
@@ -24,6 +28,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error) => {
-    console.error(error);
+    log.error(error);
     process.exit(1);
 });
