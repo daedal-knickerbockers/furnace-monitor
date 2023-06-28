@@ -1,11 +1,14 @@
 import fs from "fs";
 import { GaxiosError } from "gaxios";
-import { google, sheets_v4 } from "googleapis";
+import { drive_v3, google, sheets_v4 } from "googleapis";
+import log from "loglevel";
 import path from "path";
+import { RemoteDatabaseConfig } from "./Config";
 
-interface Config {
+interface SpreadsheetData {
     spreadsheetId: string;
     spreadsheetUrl: string;
+    authorisedUserEmails: string[];
 }
 
 interface InitSpreadsheetResult {
@@ -13,7 +16,7 @@ interface InitSpreadsheetResult {
     spreadsheetUrl: string;
 }
 
-export class LocalConfigError extends Error {
+export class LocalSpreadsheetDataError extends Error {
     public constructor(public readonly cause?: unknown) {
         super("Unknown error while managing local config");
     }
@@ -38,24 +41,26 @@ export class CreateSpreadsheetError extends Error {
     }
 }
 
+export class AuthorizeUserError extends Error {
+    public constructor(
+        public readonly spreadsheetId: string,
+        public readonly user: string,
+        public readonly cause?: unknown,
+    ) {
+        super("Could not create a new spreadsheet");
+    }
+}
+
 export class RemoteRepository {
     private static readonly CONFIG_FILE_NAME = "furnace-montior.remote-repository.config.json";
 
     private sheets: sheets_v4.Sheets;
-    private config: Config;
-    private readonly apiPath = "https://sheets.googleapis.com";
+    private drive: drive_v3.Drive;
+    private spreadsheetData: SpreadsheetData;
 
-    public constructor(private readonly keyPath: string, private readonly localConfigDirPath: string) {
-        //
-    }
-
-    /**
-     * Initialises the remote repository to work with the google sheets api
-     * @throws InvalidKeyError if no valid key could be found
-     */
-    public async init(): Promise<Config> {
+    public constructor(private readonly config: RemoteDatabaseConfig, private readonly localConfigDirPath: string) {
         const auth = new google.auth.GoogleAuth({
-            keyFile: this.keyPath,
+            keyFile: this.config.keyPath,
             scopes: [
                 "https://www.googleapis.com/auth/cloud-platform",
                 "https://www.googleapis.com/auth/drive",
@@ -82,45 +87,68 @@ export class RemoteRepository {
             auth,
         });
 
-        const config = await this.loadLocalConfig();
-        if (!config) {
-            const { spreadsheetId, spreadsheetUrl } = await this.initSpreadsheet();
-            this.config = await this.initLocalConfig(spreadsheetId, spreadsheetUrl);
-        } else {
-            this.config = config;
-            await this.checkSpreadsheetAccess(this.config.spreadsheetId);
-        }
-
-        return this.config;
+        this.drive = google.drive({
+            version: "v3",
+            auth,
+        });
     }
 
-    private async loadLocalConfig(): Promise<Config | undefined> {
-        let result: Config | undefined;
-        const localConfigFilePath = path.join(this.localConfigDirPath, RemoteRepository.CONFIG_FILE_NAME);
+    /**
+     * Initialises the remote repository to work with the google sheets api
+     * @throws InvalidKeyError if no valid key could be found
+     */
+    public async init(): Promise<SpreadsheetData> {
+        const spreadsheetData = await this.loadLocalSpreadsheetData();
+        if (!spreadsheetData) {
+            const { spreadsheetId, spreadsheetUrl } = await this.initSpreadsheet();
+            this.spreadsheetData = {
+                authorisedUserEmails: [],
+                spreadsheetId,
+                spreadsheetUrl,
+            };
+        } else {
+            this.spreadsheetData = spreadsheetData;
+            await this.checkSpreadsheetAccess(this.spreadsheetData.spreadsheetId);
+        }
+
+        const emailAddresses = Object.values(this.config.authorisedUsers).map((user) => user.email);
+        const errors = await this.authoriseUsers();
+        if (errors && errors.length > 0) {
+            log.error("Could not authorise users", errors);
+            this.spreadsheetData.authorisedUserEmails = this.spreadsheetData.authorisedUserEmails.filter(
+                (email) => !errors.some((error) => error.user === email),
+            );
+        } else {
+            this.spreadsheetData.authorisedUserEmails = emailAddresses;
+        }
+
+        await this.writeLocalSpreadsheetData(this.spreadsheetData);
+
+        return this.spreadsheetData;
+    }
+
+    private async loadLocalSpreadsheetData(): Promise<SpreadsheetData | undefined> {
+        let result: SpreadsheetData | undefined;
+        const localSpreadsheetDataFilePath = path.join(this.localConfigDirPath, RemoteRepository.CONFIG_FILE_NAME);
         try {
-            const localConfigFile = await fs.promises.readFile(localConfigFilePath, "utf8");
-            result = JSON.parse(localConfigFile) as Config;
+            const localSpreadsheetDataFile = await fs.promises.readFile(localSpreadsheetDataFilePath, "utf8");
+            result = JSON.parse(localSpreadsheetDataFile) as SpreadsheetData;
         } catch (error) {
             if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-                throw new LocalConfigError(error);
+                throw new LocalSpreadsheetDataError(error);
             }
         }
         return result;
     }
 
-    private async initLocalConfig(spreadsheetId: string, spreadsheetUrl: string): Promise<Config> {
-        const config: Config = {
-            spreadsheetId,
-            spreadsheetUrl,
-        };
+    private async writeLocalSpreadsheetData(data: SpreadsheetData): Promise<void> {
         const localConfigFilePath = path.join(this.localConfigDirPath, RemoteRepository.CONFIG_FILE_NAME);
         try {
-            const configFile = JSON.stringify(config);
+            const configFile = JSON.stringify(data);
             await fs.promises.writeFile(localConfigFilePath, configFile, "utf8");
         } catch (error) {
-            throw new LocalConfigError(error);
+            throw new LocalSpreadsheetDataError(error);
         }
-        return config;
     }
 
     private async initSpreadsheet(): Promise<InitSpreadsheetResult> {
@@ -151,6 +179,36 @@ export class RemoteRepository {
             }
         }
         return result;
+    }
+
+    private async authoriseUsers(): Promise<void | AuthorizeUserError[]> {
+        const errors: AuthorizeUserError[] = [];
+        for (const user of this.config.authorisedUsers) {
+            // Only authorise users that are not already authorised
+            if (this.spreadsheetData.authorisedUserEmails.includes(user.email)) {
+                continue;
+            }
+            try {
+                await this.drive.permissions.create({
+                    fileId: this.spreadsheetData.spreadsheetId,
+                    requestBody: {
+                        type: "user",
+                        role: "reader",
+                        emailAddress: user.email,
+                    },
+                });
+            } catch (error) {
+                const authorizeUserError = new AuthorizeUserError(
+                    this.spreadsheetData.spreadsheetId,
+                    user.email,
+                    error,
+                );
+                errors.push(authorizeUserError);
+            }
+        }
+        if (errors.length > 0) {
+            return errors;
+        }
     }
 
     private async checkSpreadsheetAccess(spreadsheetId: string): Promise<void> {

@@ -1,5 +1,6 @@
 import { Database, open } from "sqlite";
 import sqlite3 from "sqlite3";
+import { LocalDatabaseConfig } from "./Config";
 import { PinState } from "./Gpio";
 
 export interface ConsumerState {
@@ -26,13 +27,13 @@ export interface ConsumerRuntime {
 export class LocalRepository {
     private db: Database;
 
-    public constructor(private readonly path: string) {
+    public constructor(private readonly config: LocalDatabaseConfig) {
         //
     }
 
     public async init(): Promise<void> {
         this.db = await open({
-            filename: this.path,
+            filename: this.config.filePath,
             driver: sqlite3.Database,
         });
 

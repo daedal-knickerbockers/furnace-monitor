@@ -14,10 +14,10 @@ async function main(): Promise<void> {
 
     log.setLevel(config.logLevel || "info");
 
-    const localRepository = new LocalRepository(config.database.localDatabase.filePath);
+    const localRepository = new LocalRepository(config.database.localDatabase);
     await localRepository.init();
 
-    const remoteRepository = new RemoteRepository(config.database.remoteDatabase.keyPath, config.localConfigDirPath);
+    const remoteRepository = new RemoteRepository(config.database.remoteDatabase, config.localConfigDirPath);
     const remoteRepositoryConfig = await remoteRepository.init();
     log.info("Remote repository config", remoteRepositoryConfig);
 

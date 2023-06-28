@@ -7,13 +7,22 @@ export interface ConsumerConfig {
     gpio: number;
 }
 
+export interface AuthorisedUser {
+    email: string;
+}
+
+export interface RemoteDatabaseConfig {
+    keyPath: string;
+    authorisedUsers: AuthorisedUser[];
+}
+
+export interface LocalDatabaseConfig {
+    filePath: string;
+}
+
 export interface DatabaseConfig {
-    localDatabase: {
-        filePath: string;
-    };
-    remoteDatabase: {
-        keyPath: string;
-    };
+    localDatabase: LocalDatabaseConfig;
+    remoteDatabase: RemoteDatabaseConfig;
 }
 
 export interface Config {
@@ -41,6 +50,13 @@ const DatabaseConfigSchema: JTDSchemaType<DatabaseConfig> = {
         remoteDatabase: {
             properties: {
                 keyPath: { type: "string" },
+                authorisedUsers: {
+                    elements: {
+                        properties: {
+                            email: { type: "string" },
+                        },
+                    },
+                },
             },
         },
     },
