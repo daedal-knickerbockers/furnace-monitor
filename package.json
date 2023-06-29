@@ -8,7 +8,9 @@
     },
     "license": "MIT",
     "author": "Daniel Kneip",
-    "scripts": {},
+    "scripts": {
+        "start": "ts-node src/index.ts --config ./config.json"
+    },
     "dependencies": {
         "ajv": "8.12.0",
         "googleapis": "118.0.0",

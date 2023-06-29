@@ -1,28 +1,26 @@
 import { Database, open } from "sqlite";
 import sqlite3 from "sqlite3";
 import { LocalDatabaseConfig } from "./Config";
-import { PinState } from "./Gpio";
+import { ConsumerRuntime, ConsumerState } from "./Consumer";
 
-export interface ConsumerState {
-    consumerName: string;
+export type ConsumerStateDBO = Omit<ConsumerState, "stateChangeDate"> & {
     stateChangeISO: string;
     stateChangeTimestamp: number;
-    state: PinState;
-    expiresISO?: string;
-    expiresTimestamp?: number;
-}
+    // expiresISO?: string;
+    // expiresTimestamp?: number;
+};
 
-export interface ConsumerRuntime {
-    consumerName: string;
+export type ConsumerRuntimeDBO = Omit<ConsumerRuntime, "startedDate" | "stoppedDate"> & {
     startedISO: string;
     startedTimestamp: number;
     stoppedISO: string;
     stoppedTimestamp: number;
-    durationSeconds: number;
     isSavedRemotely: boolean;
-    expiresISO?: string;
-    expiresTimestamp?: number;
-}
+    // expiresISO?: string;
+    // expiresTimestamp?: number;
+};
+
+export type ConsumerRuntimeKeys = Array<{ consumerName: string; startedTimestamp: number }>;
 
 export class LocalRepository {
     private db: Database;
@@ -40,7 +38,7 @@ export class LocalRepository {
         await this.createTables();
     }
 
-    public async createConsumerState(consumerName: string, state: PinState, stateChangeDate: Date): Promise<void> {
+    public async createConsumerState(consumerState: ConsumerState): Promise<void> {
         await this.db.run(
             `
             INSERT INTO consumer_state (
@@ -56,40 +54,44 @@ export class LocalRepository {
             );
         `,
             {
-                $consumerName: consumerName,
-                $stateChangeISO: stateChangeDate.toISOString(),
-                $stateChangeTimestamp: stateChangeDate.getTime(),
-                $state: state,
+                $consumerName: consumerState.consumerName,
+                $stateChangeISO: consumerState.stateChangeDate.toISOString(),
+                $stateChangeTimestamp: consumerState.stateChangeDate.getTime(),
+                $state: consumerState.state,
             },
         );
     }
 
-    public async getLatestConsumerStateInState(
+    public async getLatestConsumerStateBeforeTimestamp(
         consumerName: string,
-        state: PinState,
+        timestamp: number,
     ): Promise<ConsumerState | undefined> {
-        return await this.db.get(
+        const consumerStateDBO = await this.db.get<ConsumerStateDBO>(
             `
-            SELECT
-                consumerName,
-                stateChangeISO,
-                stateChangeTimestamp,
-                state
+            SELECT *
             FROM consumer_state
             WHERE consumerName = $consumerName
-            AND state = $state
+            AND stateChangeTimestamp < $timestamp
             ORDER BY stateChangeTimestamp DESC
             LIMIT 1;
         `,
             {
                 $consumerName: consumerName,
-                $state: state,
+                $timestamp: timestamp,
             },
         );
+        let consumerState: ConsumerState | undefined;
+        if (consumerStateDBO) {
+            consumerState = {
+                consumerName: consumerStateDBO.consumerName,
+                stateChangeDate: new Date(consumerStateDBO.stateChangeISO),
+                state: consumerStateDBO.state,
+            };
+        }
+        return consumerState;
     }
 
-    public async createConsumerRuntime(consumerName: string, started: Date, stopped: Date): Promise<void> {
-        const durationSeconds = Math.round((stopped.getTime() - started.getTime()) / 1000);
+    public async createConsumerRuntime(consumerRuntime: ConsumerRuntime): Promise<void> {
         await this.db.run(
             `
             INSERT INTO consumer_runtime (
@@ -98,24 +100,86 @@ export class LocalRepository {
                 startedTimestamp,
                 stoppedISO,
                 stoppedTimestamp,
-                durationSeconds
+                durationSeconds,
+                isSavedRemotely
             ) VALUES (
                 $consumerName,
                 $startedISO,
                 $startedTimestamp,
                 $stoppedISO,
                 $stoppedTimestamp,
-                $durationSeconds
+                $durationSeconds,
+                $isSavedRemotely
             );
             `,
             {
-                $consumerName: consumerName,
-                $startedISO: started.toISOString(),
-                $startedTimestamp: started.getTime(),
-                $stoppedISO: stopped.toISOString(),
-                $stoppedTimestamp: stopped.getTime(),
-                $durationSeconds: durationSeconds,
+                $consumerName: consumerRuntime.consumerName,
+                $startedISO: consumerRuntime.startedDate.toISOString(),
+                $startedTimestamp: consumerRuntime.startedDate.getTime(),
+                $stoppedISO: consumerRuntime.stoppedDate.toISOString(),
+                $stoppedTimestamp: consumerRuntime.stoppedDate.getTime(),
+                $durationSeconds: consumerRuntime.durationSeconds,
+                $isSavedRemotely: false,
             },
+        );
+    }
+
+    public async getConsumerRuntimes(filters?: { isSavedRemotely?: boolean }, limit = 100): Promise<ConsumerRuntime[]> {
+        let whereClause = "";
+        const whereParams: Record<string, unknown> = {};
+        if (filters?.isSavedRemotely !== undefined) {
+            whereParams.$isSavedRemotely = filters.isSavedRemotely;
+        }
+
+        if (Object.keys(whereParams).length > 0) {
+            whereClause =
+                "WHERE " +
+                Object.keys(whereParams)
+                    .map((key) => `${key.slice(1)} = ${key}`)
+                    .join(" AND ");
+        }
+
+        const consumerRuntimeDBOs = await this.db.all<ConsumerRuntimeDBO[]>(
+            `
+            SELECT *
+            FROM consumer_runtime
+            ${whereClause}
+            ORDER BY startedTimestamp DESC
+            LIMIT $limit;
+        `,
+            {
+                ...whereParams,
+                $limit: Math.min(limit, 100),
+            },
+        );
+
+        const consumerRuntimes: ConsumerRuntime[] = [];
+        if (consumerRuntimeDBOs) {
+            for (const consumerRuntimeDBO of consumerRuntimeDBOs) {
+                consumerRuntimes.push({
+                    consumerName: consumerRuntimeDBO.consumerName,
+                    startedDate: new Date(consumerRuntimeDBO.startedISO),
+                    stoppedDate: new Date(consumerRuntimeDBO.stoppedISO),
+                    durationSeconds: consumerRuntimeDBO.durationSeconds,
+                });
+            }
+        }
+        return consumerRuntimes;
+    }
+
+    public async markConsumerRuntimesSavedRemotely(consumerRuntimeKeys: ConsumerRuntimeKeys): Promise<void> {
+        if (consumerRuntimeKeys.length === 0) {
+            return;
+        }
+
+        await this.db.exec(
+            `
+            UPDATE consumer_runtime
+            SET isSavedRemotely = 1
+            WHERE (consumerName, startedTimestamp) IN ( VALUES
+                ${consumerRuntimeKeys.map((key) => `("${key.consumerName}", ${key.startedTimestamp})`).join(",")}
+            )
+        `,
         );
     }
 
@@ -127,13 +191,13 @@ export class LocalRepository {
     private async createConsumerStateTable(): Promise<void> {
         await this.db.exec(`
             CREATE TABLE IF NOT EXISTS consumer_state (
-                id INTEGER PRIMARY KEY,
                 consumerName TEXT NOT NULL,
                 stateChangeISO TEXT NOT NULL,
                 stateChangeTimestamp INTEGER NOT NULL,
                 state INTEGER NOT NULL,
                 expiresISO TEXT,
-                expiresTimestamp INTEGER
+                expiresTimestamp INTEGER,
+                PRIMARY KEY (consumerName, stateChangeTimestamp)
             );
         `);
     }
@@ -141,7 +205,6 @@ export class LocalRepository {
     private async createConsumerRuntimeTable(): Promise<void> {
         await this.db.exec(`
             CREATE TABLE IF NOT EXISTS consumer_runtime (
-                id INTEGER PRIMARY KEY,
                 consumerName TEXT NOT NULL,
                 startedISO TEXT NOT NULL,
                 startedTimestamp INTEGER NOT NULL,
@@ -150,7 +213,8 @@ export class LocalRepository {
                 durationSeconds INTEGER NOT NULL,
                 isSavedRemotely INTEGER DEFAULT 0,
                 expiresISO TEXT,
-                expiresTimestamp INTEGER
+                expiresTimestamp INTEGER,
+                PRIMARY KEY (consumerName, startedTimestamp)
             );
         `);
     }

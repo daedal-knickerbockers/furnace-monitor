@@ -4,7 +4,10 @@ import { ConfigLoader } from "./Config";
 import { Consumer } from "./Consumer";
 import { Gpio } from "./Gpio";
 import { LocalRepository } from "./LocalRepository";
+import { RemoteDataPersister } from "./RemoteDataPersister";
 import { RemoteRepository } from "./RemoteRepository";
+
+let remoteDataPersister: RemoteDataPersister | undefined;
 
 async function main(): Promise<void> {
     const args = new Args(process.argv.slice(2));
@@ -21,13 +24,20 @@ async function main(): Promise<void> {
     const remoteRepositoryConfig = await remoteRepository.init();
     log.info("Remote repository config", remoteRepositoryConfig);
 
+    remoteDataPersister = new RemoteDataPersister(localRepository, remoteRepository);
+    remoteDataPersister.init();
+
     for (const [consumerName, consumerConfig] of Object.entries(config.consumers)) {
         const consumer = new Consumer(consumerName, consumerConfig, localRepository, gpio);
         await consumer.init();
     }
 }
 
-main().catch((error) => {
-    log.error(error);
-    process.exit(1);
-});
+main()
+    .catch((error) => {
+        log.error(error);
+        process.exit(1);
+    })
+    .finally(() => {
+        remoteDataPersister?.destroy();
+    });

@@ -4,6 +4,7 @@ import { drive_v3, google, sheets_v4 } from "googleapis";
 import log from "loglevel";
 import path from "path";
 import { RemoteDatabaseConfig } from "./Config";
+import { ConsumerRuntime } from "./Consumer";
 
 interface SpreadsheetData {
     spreadsheetId: string;
@@ -15,6 +16,8 @@ interface InitSpreadsheetResult {
     spreadsheetId: string;
     spreadsheetUrl: string;
 }
+
+type ConsumerRuntimeRow = [startedISO: string, stoppedISO: string, consumerName: string, durationSeconds: number];
 
 export class LocalSpreadsheetDataError extends Error {
     public constructor(public readonly cause?: unknown) {
@@ -98,6 +101,48 @@ export class RemoteRepository {
      * @throws InvalidKeyError if no valid key could be found
      */
     public async init(): Promise<SpreadsheetData> {
+        await this.initSpreadsheetData();
+        await this.initUserAccess();
+        await this.writeLocalSpreadsheetData(this.spreadsheetData);
+
+        return this.spreadsheetData;
+    }
+
+    public async writeConsumerRuntimes(consumerRuntime: ConsumerRuntime[]): Promise<void> {
+        try {
+            const values: ConsumerRuntimeRow[] = consumerRuntime.map((runtime) => [
+                runtime.startedDate.toISOString(),
+                runtime.stoppedDate.toISOString(),
+                runtime.consumerName,
+                runtime.durationSeconds,
+            ]);
+            await this.sheets.spreadsheets.values.append({
+                spreadsheetId: this.spreadsheetData.spreadsheetId,
+                range: "A1",
+                valueInputOption: "RAW",
+                requestBody: {
+                    values,
+                },
+            });
+        } catch (error) {
+            log.error("Could not write consumer runtimes to spreadsheet", error);
+        }
+    }
+
+    private async initUserAccess(): Promise<void> {
+        const emailAddresses = Object.values(this.config.authorisedUsers).map((user) => user.email);
+        const errors = await this.authoriseUsers();
+        if (errors && errors.length > 0) {
+            log.error("Could not authorise users", errors);
+            this.spreadsheetData.authorisedUserEmails = this.spreadsheetData.authorisedUserEmails.filter(
+                (email) => !errors.some((error) => error.user === email),
+            );
+        } else {
+            this.spreadsheetData.authorisedUserEmails = emailAddresses;
+        }
+    }
+
+    private async initSpreadsheetData(): Promise<void> {
         const spreadsheetData = await this.loadLocalSpreadsheetData();
         if (!spreadsheetData) {
             const { spreadsheetId, spreadsheetUrl } = await this.initSpreadsheet();
@@ -110,21 +155,6 @@ export class RemoteRepository {
             this.spreadsheetData = spreadsheetData;
             await this.checkSpreadsheetAccess(this.spreadsheetData.spreadsheetId);
         }
-
-        const emailAddresses = Object.values(this.config.authorisedUsers).map((user) => user.email);
-        const errors = await this.authoriseUsers();
-        if (errors && errors.length > 0) {
-            log.error("Could not authorise users", errors);
-            this.spreadsheetData.authorisedUserEmails = this.spreadsheetData.authorisedUserEmails.filter(
-                (email) => !errors.some((error) => error.user === email),
-            );
-        } else {
-            this.spreadsheetData.authorisedUserEmails = emailAddresses;
-        }
-
-        await this.writeLocalSpreadsheetData(this.spreadsheetData);
-
-        return this.spreadsheetData;
     }
 
     private async loadLocalSpreadsheetData(): Promise<SpreadsheetData | undefined> {
@@ -152,6 +182,12 @@ export class RemoteRepository {
     }
 
     private async initSpreadsheet(): Promise<InitSpreadsheetResult> {
+        const spreadsheetData = await this.createNewSpreadsheet();
+        await this.createSheets(spreadsheetData);
+        return spreadsheetData;
+    }
+
+    private async createNewSpreadsheet(): Promise<InitSpreadsheetResult> {
         let result: InitSpreadsheetResult;
         try {
             const createSpreadsheetResponse = await this.sheets.spreadsheets.create();
@@ -179,6 +215,40 @@ export class RemoteRepository {
             }
         }
         return result;
+    }
+
+    private async createSheets(spreadsheetData: InitSpreadsheetResult): Promise<void> {
+        try {
+            await this.sheets.spreadsheets.batchUpdate({
+                spreadsheetId: spreadsheetData.spreadsheetId,
+                requestBody: {
+                    requests: [
+                        {
+                            addSheet: {
+                                properties: {
+                                    title: "ConsumerStates",
+                                    index: 0,
+                                    sheetId: 0,
+                                    sheetType: "GRID",
+                                },
+                            },
+                        },
+                    ],
+                },
+            });
+        } catch (error) {
+            if ((error as GaxiosError).response) {
+                const gaxiosError = error as GaxiosError;
+                throw new CreateSpreadsheetError({
+                    body: gaxiosError.response?.data,
+                    headers: gaxiosError.response?.headers ?? {},
+                    status: gaxiosError.response?.status ?? -1,
+                    statusText: gaxiosError.response?.statusText ?? "UNKNOWN",
+                });
+            } else {
+                throw new CreateSpreadsheetError(undefined, error);
+            }
+        }
     }
 
     private async authoriseUsers(): Promise<void | AuthorizeUserError[]> {

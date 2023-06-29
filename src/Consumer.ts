@@ -2,6 +2,19 @@ import { ConsumerConfig } from "./Config";
 import { Gpio, PinState } from "./Gpio";
 import { LocalRepository } from "./LocalRepository";
 
+export interface ConsumerState {
+    consumerName: string;
+    stateChangeDate: Date;
+    state: PinState;
+}
+
+export interface ConsumerRuntime {
+    consumerName: string;
+    startedDate: Date;
+    stoppedDate: Date;
+    durationSeconds: number;
+}
+
 export class Consumer {
     public constructor(
         public readonly name: string,
@@ -18,13 +31,28 @@ export class Consumer {
 
     public async handleStateChange(state: PinState): Promise<void> {
         const stateChangeDate = new Date();
-        await this.repository.createConsumerState(this.name, state, stateChangeDate);
+        const consumerState: ConsumerState = {
+            consumerName: this.name,
+            stateChangeDate,
+            state,
+        };
+        await this.repository.createConsumerState(consumerState);
 
         if (state === PinState.LOW) {
-            const lastHighState = await this.repository.getLatestConsumerStateInState(this.name, PinState.HIGH);
-            if (lastHighState) {
-                const startedDate = new Date(lastHighState.stateChangeISO);
-                await this.repository.createConsumerRuntime(this.name, startedDate, stateChangeDate);
+            const previousState = await this.repository.getLatestConsumerStateBeforeTimestamp(
+                this.name,
+                stateChangeDate.getTime(),
+            );
+            if (previousState && previousState.state === PinState.HIGH) {
+                const startedDate = previousState.stateChangeDate;
+                const durationSeconds = (stateChangeDate.getTime() - startedDate.getTime()) / 1000;
+                const consumerRuntime: ConsumerRuntime = {
+                    consumerName: this.name,
+                    startedDate,
+                    stoppedDate: stateChangeDate,
+                    durationSeconds,
+                };
+                await this.repository.createConsumerRuntime(consumerRuntime);
             }
         }
     }
