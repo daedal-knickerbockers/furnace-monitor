@@ -1,5 +1,5 @@
-import path from "path";
 import fs from "fs";
+import path from "path";
 
 export const Direction = {
     INPUT: Buffer.from("Input"),
@@ -122,8 +122,6 @@ export class Gpio {
             const fileWatcher = this.startWatching(gpioNumber);
             this.watchedPins[gpioNumber] = fileWatcher;
         }
-        const currentPinState = await this.read(gpioNumber);
-        await handler(currentPinState);
     }
 
     private startWatching(gpioNumber: number): fs.FSWatcher {

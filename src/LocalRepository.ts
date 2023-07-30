@@ -1,7 +1,8 @@
-import { Database, open } from "sqlite";
+import { Database, Statement, open } from "sqlite";
 import sqlite3 from "sqlite3";
 import { LocalDatabaseConfig } from "./Config";
-import { ConsumerRuntime, ConsumerState } from "./Consumer";
+import { AggregationInterval, ConsumerRuntime, ConsumerRuntimeAggregate, ConsumerState } from "./Consumer";
+import { DatabaseTransaction } from "./DatabaseTransaction";
 
 export type ConsumerStateDBO = Omit<ConsumerState, "stateChangeDate"> & {
     stateChangeISO: string;
@@ -15,12 +16,24 @@ export type ConsumerRuntimeDBO = Omit<ConsumerRuntime, "startedDate" | "stoppedD
     startedTimestamp: number;
     stoppedISO: string;
     stoppedTimestamp: number;
-    isSavedRemotely: boolean;
+    isAggregated: boolean;
     // expiresISO?: string;
     // expiresTimestamp?: number;
 };
 
-export type ConsumerRuntimeKeys = Array<{ consumerName: string; startedTimestamp: number }>;
+export type ConsumerRuntimeAggregateDBO = Omit<ConsumerRuntimeAggregate, "startedDate"> & {
+    startedISO: string;
+    startedTimestamp: number;
+    // expiresISO?: string;
+    // expiresTimestamp?: number;
+};
+
+export type ConsumerRuntimeKey = { consumerName: string; startedTimestamp: number };
+export type ConsumerRuntimeKeys = ConsumerRuntimeKey[];
+export type PatchCustomerRuntimeInput = {
+    key: ConsumerRuntimeKey;
+    data: Partial<Pick<ConsumerRuntimeDBO, "isAggregated">>;
+};
 
 export class LocalRepository {
     private db: Database;
@@ -38,10 +51,15 @@ export class LocalRepository {
         await this.createTables();
     }
 
+    public async runMany(statements: Statement[]): Promise<void> {
+        const transaction = new DatabaseTransaction(this.db);
+        await transaction.runBatchAsync(statements);
+    }
+
     public async createConsumerState(consumerState: ConsumerState): Promise<void> {
         await this.db.run(
             `
-            INSERT INTO consumer_state (
+            INSERT INTO consumer_states (
                 consumerName,
                 stateChangeISO,
                 stateChangeTimestamp,
@@ -69,7 +87,7 @@ export class LocalRepository {
         const consumerStateDBO = await this.db.get<ConsumerStateDBO>(
             `
             SELECT *
-            FROM consumer_state
+            FROM consumer_states
             WHERE consumerName = $consumerName
             AND stateChangeTimestamp < $timestamp
             ORDER BY stateChangeTimestamp DESC
@@ -94,14 +112,14 @@ export class LocalRepository {
     public async createConsumerRuntime(consumerRuntime: ConsumerRuntime): Promise<void> {
         await this.db.run(
             `
-            INSERT INTO consumer_runtime (
+            INSERT INTO consumer_runtimes (
                 consumerName,
                 startedISO,
                 startedTimestamp,
                 stoppedISO,
                 stoppedTimestamp,
                 durationSeconds,
-                isSavedRemotely
+                isAggregated
             ) VALUES (
                 $consumerName,
                 $startedISO,
@@ -109,7 +127,7 @@ export class LocalRepository {
                 $stoppedISO,
                 $stoppedTimestamp,
                 $durationSeconds,
-                $isSavedRemotely
+                $isAggregated
             );
             `,
             {
@@ -119,16 +137,22 @@ export class LocalRepository {
                 $stoppedISO: consumerRuntime.stoppedDate.toISOString(),
                 $stoppedTimestamp: consumerRuntime.stoppedDate.getTime(),
                 $durationSeconds: consumerRuntime.durationSeconds,
-                $isSavedRemotely: false,
+                $isAggregated: false,
             },
         );
     }
 
-    public async getConsumerRuntimes(filters?: { isSavedRemotely?: boolean }, limit = 100): Promise<ConsumerRuntime[]> {
+    public async getConsumerRuntimes(
+        filters?: { consumerName?: string; isAggregated?: boolean },
+        limit = 100,
+    ): Promise<ConsumerRuntime[]> {
         let whereClause = "";
         const whereParams: Record<string, unknown> = {};
-        if (filters?.isSavedRemotely !== undefined) {
-            whereParams.$isSavedRemotely = filters.isSavedRemotely;
+        if (filters?.isAggregated !== undefined) {
+            whereParams.$isAggregated = filters.isAggregated;
+        }
+        if (filters?.consumerName) {
+            whereParams.$consumerName = filters.consumerName;
         }
 
         if (Object.keys(whereParams).length > 0) {
@@ -142,7 +166,7 @@ export class LocalRepository {
         const consumerRuntimeDBOs = await this.db.all<ConsumerRuntimeDBO[]>(
             `
             SELECT *
-            FROM consumer_runtime
+            FROM consumer_runtimes
             ${whereClause}
             ORDER BY startedTimestamp DESC
             LIMIT $limit;
@@ -167,30 +191,110 @@ export class LocalRepository {
         return consumerRuntimes;
     }
 
-    public async markConsumerRuntimesSavedRemotely(consumerRuntimeKeys: ConsumerRuntimeKeys): Promise<void> {
-        if (consumerRuntimeKeys.length === 0) {
-            return;
+    public async createPatchCustomerRuntimeStatement(patch: PatchCustomerRuntimeInput): Promise<Statement> {
+        const setStrings: string[] = [];
+        const params: Record<string, unknown> = {
+            $consumerName: patch.key.consumerName,
+            $startedTimestamp: patch.key.startedTimestamp,
+        };
+        for (const [key, value] of Object.entries(patch.data)) {
+            setStrings.push(`${key} = $${key}`);
+            params[`$${key}`] = value;
         }
-
-        await this.db.exec(
+        return await this.db.prepare(
             `
-            UPDATE consumer_runtime
-            SET isSavedRemotely = 1
-            WHERE (consumerName, startedTimestamp) IN ( VALUES
-                ${consumerRuntimeKeys.map((key) => `("${key.consumerName}", ${key.startedTimestamp})`).join(",")}
-            )
-        `,
+            UPDATE consumer_runtimes
+            SET ${setStrings.join(", ")}
+            WHERE consumerName = $consumerName
+            AND startedTimestamp = $startedTimestamp;
+            `,
+            params,
         );
     }
 
-    private async createTables(): Promise<void> {
-        await this.createConsumerStateTable();
-        await this.createConsumerRuntimeTable();
+    public async patchCustomerRuntime(patch: PatchCustomerRuntimeInput): Promise<void> {
+        const statement = await this.createPatchCustomerRuntimeStatement(patch);
+        await statement.run();
+        await statement.finalize();
     }
 
-    private async createConsumerStateTable(): Promise<void> {
+    public async createUpsertConsumerRuntimeAggregateStatement(consumerRuntimeAggregate: ConsumerRuntimeAggregate) {
+        return await this.db.prepare(
+            `
+            INSERT INTO consumer_runtime_aggregates (
+                consumerName,
+                startedISO,
+                startedTimestamp,
+                durationSeconds,
+                interval
+            ) VALUES (
+                $consumerName,
+                $startedISO,
+                $startedTimestamp,
+                $durationSeconds,
+                $interval
+            )
+            ON CONFLICT (consumerName, startedTimestamp) DO UPDATE SET
+                durationSeconds = $durationSeconds;
+            `,
+            {
+                $consumerName: consumerRuntimeAggregate.consumerName,
+                $startedISO: consumerRuntimeAggregate.startedDate.toISOString(),
+                $startedTimestamp: consumerRuntimeAggregate.startedDate.getTime(),
+                $durationSeconds: consumerRuntimeAggregate.durationSeconds,
+                $interval: consumerRuntimeAggregate.interval,
+            },
+        );
+    }
+
+    public async upsertConsumerRuntimeAggregate(consumerRuntimeAggregate: ConsumerRuntimeAggregate): Promise<void> {
+        const statement = await this.createUpsertConsumerRuntimeAggregateStatement(consumerRuntimeAggregate);
+        await statement.run();
+        await statement.finalize();
+    }
+
+    public async getConsumerRuntimeAggregate(
+        consumerName: string,
+        startedDate: Date,
+        interval: AggregationInterval,
+    ): Promise<ConsumerRuntimeAggregate | undefined> {
+        const consumerRuntimeAggregateDBO = await this.db.get<ConsumerRuntimeAggregateDBO>(
+            `
+            SELECT *
+            FROM consumer_runtime_aggregates
+            WHERE consumerName = $consumerName
+            AND startedTimestamp = $startedTimestamp
+            AND interval = $interval
+            LIMIT 1;
+        `,
+            {
+                $consumerName: consumerName,
+                $startedTimestamp: startedDate.getTime(),
+                $interval: interval,
+            },
+        );
+
+        let consumerRuntimeAggregate: ConsumerRuntimeAggregate | undefined;
+        if (consumerRuntimeAggregateDBO) {
+            consumerRuntimeAggregate = {
+                consumerName: consumerRuntimeAggregateDBO.consumerName,
+                startedDate: new Date(consumerRuntimeAggregateDBO.startedISO),
+                durationSeconds: consumerRuntimeAggregateDBO.durationSeconds,
+                interval: consumerRuntimeAggregateDBO.interval,
+            };
+        }
+        return consumerRuntimeAggregate;
+    }
+
+    private async createTables(): Promise<void> {
+        await this.createConsumerStatesTable();
+        await this.createConsumerRuntimesTable();
+        await this.createConsumerRuntimeAggregatesTable();
+    }
+
+    private async createConsumerStatesTable(): Promise<void> {
         await this.db.exec(`
-            CREATE TABLE IF NOT EXISTS consumer_state (
+            CREATE TABLE IF NOT EXISTS consumer_states (
                 consumerName TEXT NOT NULL,
                 stateChangeISO TEXT NOT NULL,
                 stateChangeTimestamp INTEGER NOT NULL,
@@ -202,16 +306,31 @@ export class LocalRepository {
         `);
     }
 
-    private async createConsumerRuntimeTable(): Promise<void> {
+    private async createConsumerRuntimesTable(): Promise<void> {
         await this.db.exec(`
-            CREATE TABLE IF NOT EXISTS consumer_runtime (
+            CREATE TABLE IF NOT EXISTS consumer_runtimes (
                 consumerName TEXT NOT NULL,
                 startedISO TEXT NOT NULL,
                 startedTimestamp INTEGER NOT NULL,
                 stoppedISO TEXT NOT NULL,
                 stoppedTimestamp INTEGER NOT NULL,
                 durationSeconds INTEGER NOT NULL,
-                isSavedRemotely INTEGER DEFAULT 0,
+                isAggregated INTEGER DEFAULT 0,
+                expiresISO TEXT,
+                expiresTimestamp INTEGER,
+                PRIMARY KEY (consumerName, startedTimestamp)
+            );
+        `);
+    }
+
+    private async createConsumerRuntimeAggregatesTable(): Promise<void> {
+        await this.db.exec(`
+            CREATE TABLE IF NOT EXISTS consumer_runtime_aggregates (
+                consumerName TEXT NOT NULL,
+                startedISO TEXT NOT NULL,
+                startedTimestamp INTEGER NOT NULL,
+                durationSeconds INTEGER NOT NULL,
+                interval TEXT NOT NULL,
                 expiresISO TEXT,
                 expiresTimestamp INTEGER,
                 PRIMARY KEY (consumerName, startedTimestamp)

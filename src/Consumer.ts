@@ -15,6 +15,15 @@ export interface ConsumerRuntime {
     durationSeconds: number;
 }
 
+export type AggregationInterval = "hourly" | "daily" | "weekly" | "monthly" | "yearly";
+
+export interface ConsumerRuntimeAggregate {
+    consumerName: string;
+    startedDate: Date;
+    durationSeconds: number;
+    interval: AggregationInterval;
+}
+
 export class Consumer {
     public constructor(
         public readonly name: string,
@@ -36,16 +45,20 @@ export class Consumer {
             stateChangeDate,
             state,
         };
+        const previousState = await this.repository.getLatestConsumerStateBeforeTimestamp(
+            this.name,
+            stateChangeDate.getTime(),
+        );
+        if (previousState && previousState.state === state) {
+            // Do not persist identical state changes - this might happen when the gpio file is manually modified
+            return;
+        }
         await this.repository.createConsumerState(consumerState);
 
         if (state === PinState.LOW) {
-            const previousState = await this.repository.getLatestConsumerStateBeforeTimestamp(
-                this.name,
-                stateChangeDate.getTime(),
-            );
             if (previousState && previousState.state === PinState.HIGH) {
                 const startedDate = previousState.stateChangeDate;
-                const durationSeconds = (stateChangeDate.getTime() - startedDate.getTime()) / 1000;
+                const durationSeconds = Math.round((stateChangeDate.getTime() - startedDate.getTime()) / 1000);
                 const consumerRuntime: ConsumerRuntime = {
                     consumerName: this.name,
                     startedDate,
