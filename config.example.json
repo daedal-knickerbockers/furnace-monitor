@@ -13,14 +13,6 @@
     "database": {
         "localDatabase": {
             "filePath": "/var/lib/furnace-monitor/database.sqlite"
-        },
-        "remoteDatabase": {
-            "keyPath": "path/to/my/gcp-key-file.json",
-            "authorisedUsers": [
-                {
-                    "email": "xyz@foo.bar"
-                }
-            ]
         }
     }
 }
