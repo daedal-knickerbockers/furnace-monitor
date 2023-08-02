@@ -9,6 +9,7 @@
     "license": "MIT",
     "author": "Daniel Kneip",
     "scripts": {
+        "simulateGpio": "ts-node scripts/simulateGpio.ts --config ./config.json",
         "start": "ts-node src/index.ts --config ./config.json"
     },
     "dependencies": {
