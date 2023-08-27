@@ -1,10 +1,10 @@
 import log from "loglevel";
 import { Args } from "./Args";
 import { ConfigLoader } from "./Config";
-import { Consumer } from "./Consumer";
 import { Gpio } from "./Gpio";
-import { LocalRepository } from "./LocalRepository";
-import { RuntimeAggregator } from "./RuntimeAggregator";
+import { Consumer } from "./consumer/Consumer";
+import { ConsumerRepository } from "./consumer/ConsumerRepository";
+import { RuntimeAggregator } from "./consumer/RuntimeAggregator";
 
 let shouldRun = true;
 let runtimeAggregator: RuntimeAggregator | undefined;
@@ -22,7 +22,7 @@ async function main(): Promise<void> {
 
     log.setLevel(config.logLevel || "info");
 
-    const localRepository = new LocalRepository(config.database.localDatabase);
+    const localRepository = new ConsumerRepository(config.database.localDatabase);
     await localRepository.init();
 
     runtimeAggregator = new RuntimeAggregator(localRepository);

@@ -1,6 +1,6 @@
-import { ConsumerConfig } from "./Config";
-import { Gpio, PinState } from "./Gpio";
-import { LocalRepository } from "./LocalRepository";
+import { ConsumerConfig } from "../Config";
+import { Gpio, PinState } from "../Gpio";
+import { ConsumerRepository } from "./ConsumerRepository";
 
 export interface ConsumerState {
     consumerName: string;
@@ -28,7 +28,7 @@ export class Consumer {
     public constructor(
         public readonly name: string,
         private readonly config: ConsumerConfig,
-        private readonly repository: LocalRepository,
+        private readonly repository: ConsumerRepository,
         private readonly gpio: Gpio,
     ) {
         //

@@ -1,7 +1,7 @@
 import { Statement } from "sqlite";
+import { clearAsyncInterval, setAsyncInterval } from "../asyncInterval";
 import { AggregationInterval, ConsumerRuntime, ConsumerRuntimeAggregate } from "./Consumer";
-import { LocalRepository } from "./LocalRepository";
-import { clearAsyncInterval, setAsyncInterval } from "./asyncInterval";
+import { ConsumerRepository } from "./ConsumerRepository";
 
 export class InvalidAggregationIntervalError extends Error {
     public constructor(interval: AggregationInterval) {
@@ -10,10 +10,18 @@ export class InvalidAggregationIntervalError extends Error {
 }
 
 export class RuntimeAggregator {
+    private static INTERVAL_SECONDS: Record<AggregationInterval, number> = {
+        hourly: 60 * 60,
+        daily: 60 * 60 * 24,
+        weekly: 60 * 60 * 24 * 7,
+        monthly: 60 * 60 * 24 * 30,
+        yearly: 60 * 60 * 24 * 365,
+    };
+
     public readonly consumerNames: Set<string>;
     private readonly aggregateRuntimesHandle: number;
 
-    public constructor(private readonly repository: LocalRepository) {
+    public constructor(private readonly repository: ConsumerRepository) {
         this.consumerNames = new Set();
         this.aggregateRuntimesHandle = setAsyncInterval(
             this.aggregateRuntimes.bind(this),
@@ -67,7 +75,8 @@ export class RuntimeAggregator {
         interval: AggregationInterval,
     ): Promise<ConsumerRuntimeAggregate[]> {
         const aggregatesByISOString: { [key: string]: ConsumerRuntimeAggregate } = {};
-        for (const runtime of runtimes) {
+        const splitRuntimes = this.splitRuntimesByInterval(runtimes, interval);
+        for (const runtime of splitRuntimes) {
             const intervalStart = this.getLastIntervalStart(interval, runtime.startedDate);
             const existingAggregate = aggregatesByISOString[intervalStart.toISOString()];
             if (existingAggregate) {
@@ -94,6 +103,33 @@ export class RuntimeAggregator {
             }
         }
         return Object.values(aggregatesByISOString);
+    }
+
+    private splitRuntimesByInterval(runtimes: ConsumerRuntime[], interval: AggregationInterval): ConsumerRuntime[] {
+        const separatedRuntimes: ConsumerRuntime[] = [];
+        for (const runtime of runtimes) {
+            const numberOfIntervals = Math.ceil(runtime.durationSeconds / RuntimeAggregator.INTERVAL_SECONDS[interval]);
+            for (let i = 0; i < numberOfIntervals; i++) {
+                const intervalStart = new Date(
+                    runtime.startedDate.getTime() + i * RuntimeAggregator.INTERVAL_SECONDS[interval] * 1000,
+                );
+                const intervalEnd = new Date(
+                    runtime.startedDate.getTime() + (i + 1) * RuntimeAggregator.INTERVAL_SECONDS[interval] * 1000,
+                );
+                const intervalDurationSeconds =
+                    intervalEnd.getTime() > runtime.stoppedDate.getTime()
+                        ? Math.round((runtime.stoppedDate.getTime() - intervalStart.getTime()) / 1000)
+                        : RuntimeAggregator.INTERVAL_SECONDS[interval];
+                const intervalRuntime: ConsumerRuntime = {
+                    consumerName: runtime.consumerName,
+                    startedDate: intervalStart,
+                    stoppedDate: intervalEnd,
+                    durationSeconds: intervalDurationSeconds,
+                };
+                separatedRuntimes.push(intervalRuntime);
+            }
+        }
+        return separatedRuntimes;
     }
 
     private getLastIntervalStart(interval: AggregationInterval, date: Date): Date {

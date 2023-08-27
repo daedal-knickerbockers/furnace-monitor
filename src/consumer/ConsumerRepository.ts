@@ -1,8 +1,8 @@
 import { Database, Statement, open } from "sqlite";
 import sqlite3 from "sqlite3";
-import { LocalDatabaseConfig } from "./Config";
+import { LocalDatabaseConfig } from "../Config";
+import { DatabaseTransaction } from "../DatabaseTransaction";
 import { AggregationInterval, ConsumerRuntime, ConsumerRuntimeAggregate, ConsumerState } from "./Consumer";
-import { DatabaseTransaction } from "./DatabaseTransaction";
 
 export type ConsumerStateDBO = Omit<ConsumerState, "stateChangeDate"> & {
     stateChangeISO: string;
@@ -35,7 +35,7 @@ export type PatchCustomerRuntimeInput = {
     data: Partial<Pick<ConsumerRuntimeDBO, "isAggregated">>;
 };
 
-export class LocalRepository {
+export class ConsumerRepository {
     private db: Database;
 
     public constructor(private readonly config: LocalDatabaseConfig) {
