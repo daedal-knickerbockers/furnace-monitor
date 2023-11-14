@@ -16,6 +16,7 @@
         "ajv": "8.12.0",
         "googleapis": "118.0.0",
         "loglevel": "1.8.1",
+        "resol-vbus": "^0.27.0",
         "sqlite": "4.2.1",
         "sqlite3": "5.1.6",
         "typescript": "5.0.4"

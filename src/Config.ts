@@ -7,6 +7,11 @@ export interface ConsumerConfig {
     gpio: number;
 }
 
+export interface ResolSensorConfig {
+    host: string;
+    password: string;
+}
+
 export interface LocalDatabaseConfig {
     filePath: string;
 }
@@ -21,12 +26,20 @@ export interface Config {
     localConfigDirPath: string;
     gpioBasePath?: string;
     consumers: Record<string, ConsumerConfig>;
+    resolSensors: Record<string, ResolSensorConfig>;
     database: DatabaseConfig;
 }
 
 const ConsumerConfigSchema: JTDSchemaType<ConsumerConfig> = {
     properties: {
         gpio: { type: "uint8" },
+    },
+};
+
+const ResolSensorConfigSchema: JTDSchemaType<ResolSensorConfig> = {
+    properties: {
+        host: { type: "string" },
+        password: { type: "string" },
     },
 };
 
@@ -45,6 +58,9 @@ const ConfigSchema: JTDSchemaType<Config> = {
         localConfigDirPath: { type: "string" },
         consumers: {
             values: ConsumerConfigSchema,
+        },
+        resolSensors: {
+            values: ResolSensorConfigSchema,
         },
         database: DatabaseConfigSchema,
     },

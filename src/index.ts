@@ -1,10 +1,11 @@
 import log from "loglevel";
 import { Args } from "./Args";
-import { ConfigLoader } from "./Config";
+import { Config, ConfigLoader } from "./Config";
 import { Gpio } from "./Gpio";
 import { Consumer } from "./consumer/Consumer";
 import { ConsumerRepository } from "./consumer/ConsumerRepository";
 import { RuntimeAggregator } from "./consumer/RuntimeAggregator";
+import { ResolSensor } from "./resol-sensor/ResolSensor";
 
 let shouldRun = true;
 let runtimeAggregator: RuntimeAggregator | undefined;
@@ -22,20 +23,38 @@ async function main(): Promise<void> {
 
     log.setLevel(config.logLevel || "info");
 
-    const localRepository = new ConsumerRepository(config.database.localDatabase);
-    await localRepository.init();
+    const consumerRepository = new ConsumerRepository(config.database.localDatabase);
+    await consumerRepository.init();
 
-    runtimeAggregator = new RuntimeAggregator(localRepository);
+    runtimeAggregator = new RuntimeAggregator(consumerRepository);
 
-    for (const [consumerName, consumerConfig] of Object.entries(config.consumers)) {
-        const consumer = new Consumer(consumerName, consumerConfig, localRepository, gpio);
-        await consumer.init();
-        runtimeAggregator.registerConsumer(consumerName);
-        log.info(`Registered consumer: ${consumerName}`);
-    }
+    await initializeConsumers(config, consumerRepository, gpio);
+
+    await initializeResolSensors(config);
 
     while (shouldRun) {
         await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+}
+
+async function initializeConsumers(
+    config: Readonly<Config>,
+    consumerRepository: ConsumerRepository,
+    gpio: Gpio,
+): Promise<void> {
+    for (const [consumerName, consumerConfig] of Object.entries(config.consumers)) {
+        const consumer = new Consumer(consumerName, consumerConfig, consumerRepository, gpio);
+        await consumer.init();
+        runtimeAggregator!.registerConsumer(consumerName);
+        log.info(`Registered consumer: ${consumerName}`);
+    }
+}
+
+async function initializeResolSensors(config: Readonly<Config>): Promise<void> {
+    for (const [resolSensorName, resolSensorConfig] of Object.entries(config.resolSensors)) {
+        const resolSensor = new ResolSensor(resolSensorConfig);
+        await resolSensor.init();
+        log.info(`Registered resol sensor: ${resolSensorName}`);
     }
 }
 
