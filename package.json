@@ -11,7 +11,8 @@
     "scripts": {
         "simulateGpio": "ts-node scripts/simulateGpio.ts --config ./config.json",
         "start": "ts-node src/index.ts --config ./config.json",
-        "build": "tsc -p tsconfig.build.json  && chmod +x ./dist/index.js"
+        "start:prod": "node dist/index.js",
+        "build": "tsc -p tsconfig.build.json"
     },
     "dependencies": {
         "ajv": "8.12.0",

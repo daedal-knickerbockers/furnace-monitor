@@ -14,5 +14,11 @@
         "localDatabase": {
             "filePath": "/var/lib/furnace-monitor/database.sqlite"
         }
+    },
+    "resolSensors": {
+        "myCoolSensor": {
+            "host": "192.168.178.123",
+            "password": "fooBarPassword"
+        }
     }
 }

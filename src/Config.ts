@@ -26,7 +26,7 @@ export interface Config {
     localConfigDirPath: string;
     gpioBasePath?: string;
     consumers: Record<string, ConsumerConfig>;
-    resolSensors: Record<string, ResolSensorConfig>;
+    resolSensors?: Record<string, ResolSensorConfig>;
     database: DatabaseConfig;
 }
 
@@ -59,14 +59,14 @@ const ConfigSchema: JTDSchemaType<Config> = {
         consumers: {
             values: ConsumerConfigSchema,
         },
-        resolSensors: {
-            values: ResolSensorConfigSchema,
-        },
         database: DatabaseConfigSchema,
     },
     optionalProperties: {
         logLevel: { enum: ["trace", "debug", "info", "warn", "error"] },
         gpioBasePath: { type: "string" },
+        resolSensors: {
+            values: ResolSensorConfigSchema,
+        },
     },
 };
 

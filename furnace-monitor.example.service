@@ -2,7 +2,7 @@
 Description=Furnace Monitor
 
 [Service]
-ExecStart=/path/to/my/app/index.js
+ExecStart=/path/to/my/app/start.sh
 Restart=always
 User=nobody
 Group=nogroup
