@@ -51,6 +51,10 @@ async function initializeConsumers(
 }
 
 async function initializeResolSensors(config: Readonly<Config>): Promise<void> {
+    if (!config.resolSensors) {
+        return;
+    }
+
     for (const [resolSensorName, resolSensorConfig] of Object.entries(config.resolSensors)) {
         const resolSensor = new ResolSensor(resolSensorConfig);
         await resolSensor.init();
