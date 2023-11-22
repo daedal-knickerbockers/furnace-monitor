@@ -10,7 +10,8 @@
     "author": "Daniel Kneip",
     "scripts": {
         "simulateGpio": "ts-node scripts/simulateGpio.ts --config ./config.json",
-        "start": "ts-node src/index.ts --config ./config.json"
+        "start": "ts-node src/index.ts --config ./config.json",
+        "build": "tsc && chmod +x ./dist/index.js"
     },
     "dependencies": {
         "ajv": "8.12.0",
