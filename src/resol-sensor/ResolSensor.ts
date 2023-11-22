@@ -1,4 +1,4 @@
-import { log } from "loglevel";
+import log from "loglevel";
 import { Specification, TcpConnection } from "resol-vbus";
 import { ResolSensorConfig } from "../Config";
 

@@ -3,10 +3,8 @@
         "target": "ES2022",
         "module": "CommonJS",
         "lib": ["es2022"],
-        "outDir": "./dist",
-        "skipLibCheck": true,
+        "noEmit": true,
         "moduleResolution": "Node",
-        "declaration": true,
         "strict": true,
         "noImplicitAny": true,
         "strictNullChecks": true,
@@ -16,12 +14,11 @@
         "noUnusedParameters": false,
         "noImplicitReturns": true,
         "noFallthroughCasesInSwitch": false,
-        "inlineSourceMap": true,
-        "inlineSources": true,
         "experimentalDecorators": true,
         "emitDecoratorMetadata": true,
         "strictPropertyInitialization": false,
         "esModuleInterop": true,
         "typeRoots": ["./node_modules/@types", "./@types"]
-    }
+    },
+    "include": ["src", "scripts"]
 }

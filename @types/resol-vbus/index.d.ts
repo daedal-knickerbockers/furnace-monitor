@@ -1,6 +1,6 @@
-import { Duplex } from "stream";
-
 declare module "resol-vbus" {
+    import { Duplex } from "stream";
+
     export const VERSION: string;
 
     export const utils: {
@@ -132,7 +132,7 @@ declare module "resol-vbus" {
 
         public getDefaultSpecificationFile(): any;
 
-        public static async loadFromFile(filename: string): SpecificationFile;
+        public static loadFromFile(filename: string): Promise<SpecificationFile>;
     }
 
     /**
@@ -233,6 +233,196 @@ declare module "resol-vbus" {
         name: { [key: string]: string };
         type: TypeSpecification;
         getRawValue: packetFieldGetRawValue;
+    }
+
+    export class Header {
+        public constructor(options: any);
+
+        /**
+         * Creates a representation of this Header instance that can be
+         * transmitted over a Connection. If no buffer is given as an
+         * arguments, it creates a new one that is big enough to hold
+         * the representation.
+         *
+         * Must be implemented by sub-class.
+         *
+         * @abstract
+         * @param {Buffer} [buffer] Buffer object to store data in
+         * @param {number} [start] Start index in the buffer
+         * @param {number} [end] End index in the buffer
+         * @returns {Buffer} Buffer object containing the data
+         */
+        public toLiveBuffer(buffer: Buffer, start: number, end: number): Buffer;
+
+        /**
+         * Returns the protocol version of this Header instance as a 8-bit
+         * number. The high nibble is used for the major version, the low
+         * nibble for the minor version. For example: a header with protocol
+         * version 2.0 would return `0x20`.
+         *
+         * Must be implemented by sub-class.
+         *
+         * @abstract
+         * @returns {number} Protocol version
+         */
+        getProtocolVersion(): number;
+
+        /**
+         * Returns an info number about this Header instance. It can be used
+         * for sorting purposes (to distinguish Header objects that would
+         * otherwise compare as equal).
+         *
+         * @returns {number} Info value
+         */
+        getInfo(): number;
+
+        /**
+         * Returns a string identifier describing this Header instance.
+         * It contains at least:
+         *
+         *   - channel
+         *   - destination address
+         *   - source address
+         *   - protocol version
+         *
+         * Sub-classes can extend that information. The structure of this
+         * identifier is implementation specific, do not rely on it!
+         *
+         * @returns {string} Identifier
+         */
+        getId(): string;
+
+        /**
+         * Compares this Header instance to another one.
+         *
+         * Sub-classes can extend the comparison to include specific
+         * information.
+         *
+         * @param {Header} that Another Header instance to compare to.
+         * @returns {number} Returns a number
+         *
+         *   - less than 0 if `this < that`
+         *   - greater than 0 if `this > that`
+         *   - equal to to if `this == that`
+         */
+        compareTo(that: Header): number;
+
+        /**
+         * Creates a Header instance from a representation that was
+         * received over a Connection.
+         *
+         * Must be implemented by sub-class.
+         *
+         * @abstract
+         * @param {Buffer} buffer Buffer that contains the representation
+         * @param {number} start Start index in the buffer
+         * @param {number} end End index in the buffer
+         * @returns {Header} Header instance created from the representation
+         */
+        static fromLiveBuffer(buffer: Buffer, start: number, end: number): Header;
+
+        /**
+         * Calculates the VBus checksum (according to version x.0 specification)
+         * over a part of a Buffer instance.
+         *
+         * @param {Buffer} buffer Buffer to calc checksum for
+         * @param {number} start Start index in the buffer
+         * @param {number} end End index in the buffer
+         * @returns {number} Calculated checksum
+         */
+        static calcChecksumV0(buffer: Buffer, start: number, end: number): number;
+
+        /**
+         * Calculates the VBus checksum (according to version x.0 specification)
+         * over a part of a Buffer instance and compares it the checksum byte
+         * stored at the `end` position.
+         *
+         * @param {Buffer} buffer Buffer to calc and compare checksum for
+         * @param {number} start Start index in the buffer
+         * @param {number} end End index in the buffer
+         * @returns {boolean} Result whether calculated and stored checksum match
+         */
+        static calcAndCompareChecksumV0(buffer: Buffer, start: number, end: number): boolean;
+
+        /**
+         * Calculates the VBus checksum (according to version x.0 specification)
+         * over a part of the Buffer instance and stores it at the `end` position.
+         *
+         * @param {Buffer} buffer Buffer to calc and store checksum for
+         * @param {number} start Start index in the buffer
+         * @param {number} end End index in the buffer
+         * @returns {number} Calculated checksum
+         */
+        static calcAndSetChecksumV0(buffer: Buffer, start: number, end: number): number;
+
+        static calcChecksumV1(buffer: Buffer, start: number, end: number): number;
+
+        static calcChecksum(version: number, buffer: Buffer, start: number, end: number): number;
+
+        static calcAndCompareChecksum(version: number, buffer: Buffer, start: number, end: number): boolean;
+
+        static calcAndSetChecksum(version: number, buffer: Buffer, start: number, end: number): number;
+
+        /**
+         * Copies a part of the source Buffer instance to the destination Buffer
+         * instance, injecting the MSBs stored in the septett byte during the process.
+         *
+         * @param {Buffer} srcBuffer Buffer to copy from
+         * @param {number} srcStart Start index in the source buffer
+         * @param {number} srcEnd End index in the source buffer
+         * @param {Buffer} dstBuffer Buffer to copy to
+         * @param {number} dstStart Start index in the destination buffer
+         */
+        static injectSeptett(
+            srcBuffer: Buffer,
+            srcStart: number,
+            srcEnd: number,
+            dstBuffer: Buffer,
+            dstStart: number,
+        ): void;
+
+        /**
+         * Copies a part of the source Buffer instance to the destination Buffer
+         * instance, extracting the MSBs during the process and storing the septett
+         * byte to the destination buffer's end position.
+         *
+         * @param {Buffer} srcBuffer Buffer to copy from
+         * @param {number} srcStart Start index in the source buffer
+         * @param {number} srcEnd End index in the source buffer
+         * @param {Buffer} dstBuffer Buffer to copy to
+         * @param {number} dstStart Start index in the destination buffer
+         */
+        static extractSeptett(
+            srcBuffer: Buffer,
+            srcStart: number,
+            srcEnd: number,
+            dstBuffer: Buffer,
+            dstStart: number,
+        ): void;
+    }
+
+    export class Packet extends Header {
+        /**
+         * Creates a new Packet instance and optionally initializes its members with the given values.
+         *
+         * @constructs
+         * @augments Header
+         * @param {object} options Initialization values for this instance's members
+         * @param {number} options.command {@link Packet#command}
+         * @param {number} options.frameCount {@link Packet#frameCount}
+         * @param {Buffer} options.frameData {@link Packet#frameData}
+         * @see Header#constructor
+         *
+         * @classdesc
+         * The Packet sub-class provides access to all properties and methods applicable for VBus version 1 packets.
+         * In addition to the packet header it may contain up to 508 bytes of payload data.
+         * The structure of the payload depends on the combination of destination and source addresses as well as
+         * the command of the packet. The different payloads are described in further detail
+         * in Chapter H of the VBus Protocol Specification and can be decoded using a Specification instance.
+         *
+         * @see Specification
+         */
+        constructor(options: any);
     }
 
     /**
@@ -337,7 +527,7 @@ declare module "resol-vbus" {
          * @param {string} options.language {@link Specification#language}
          * @param {string} options.specificationData {@link Specification#specificationData}
          */
-        public constructor(options);
+        public constructor(options: any);
 
         /**
          * Gets the UnitSpecification object matching the given identifier.
@@ -601,11 +791,16 @@ declare module "resol-vbus" {
          */
         public getRawValue(packetField: PacketFieldSpecification, buffer: Buffer, start: number, end: number): number;
 
-        public getRoundedRawValue(packetField, buffer, start, end): string;
+        public getRoundedRawValue(
+            packetField: PacketFieldSpecification,
+            buffer: Buffer,
+            start: number,
+            end: number,
+        ): string;
 
-        public invertConversions(conversions): any;
+        public invertConversions(conversions: any): any;
 
-        public setRawValue(packetField, rawValue, buffer, start, end): any;
+        public setRawValue(packetField: PacketFieldSpecification, buffer: Buffer, start: number, end: number): any;
 
         /**
          * Converts a raw number value from one unit to another. The units must be in the same unit family.
@@ -616,7 +811,7 @@ declare module "resol-vbus" {
          * @return {object} Result containing a `rawValue` property with the conversion result and a `unit` property
          * with the associated unit.
          */
-        public convertRawValue(rawValue_, sourceUnit_, targetUnit_): any;
+        public convertRawValue(rawValue_: number, sourceUnit_: any, targetUnit_: any): any;
 
         /**
          * Formats a raw value into its textual representation.
@@ -636,9 +831,15 @@ declare module "resol-vbus" {
          * undefined
          * >
          */
-        public formatTextValueFromRawValue(packetField, rawValue, unit): string;
+        public formatTextValueFromRawValue(packetField: PacketFieldSpecification, rawValue: number, unit: any): string;
 
-        public formatTextValueFromRawValueInternal(rawValue, unit, rootType, precision, defaultUnit): any;
+        public formatTextValueFromRawValueInternal(
+            rawValue: number,
+            unit: any,
+            rootType: any,
+            precision: any,
+            defaultUnit: any,
+        ): any;
 
         /**
          * Gets an array of PacketField objects for the provided Packet objects.
@@ -646,11 +847,11 @@ declare module "resol-vbus" {
          * @param {Header[]} headers Array of Header objects
          * @returns {PacketField[]} Array of PacketField objects
          */
-        public getPacketFieldsForHeaders(headers): PacketField[];
+        public getPacketFieldsForHeaders(headers: any[]): PacketField[];
 
-        public setPacketFieldRawValues(packetFields, rawValues): any;
+        public setPacketFieldRawValues(packetFields: PacketField[], rawValues: any): any;
 
-        public getFilteredPacketFieldSpecificationsForHeaders(headers): any;
+        public getFilteredPacketFieldSpecificationsForHeaders(headers: any[]): any;
 
         /**
          * Gets an array of BlockType sections from a collection of headers.
@@ -658,7 +859,7 @@ declare module "resol-vbus" {
          * @param  {Header[]} headers Array of Header objects
          * @return {BlockTypeSection[]} Array of BlockTypeSection objects
          */
-        public getBlockTypeSectionsForHeaders(headers): BlockTypeSection[];
+        public getBlockTypeSectionsForHeaders(headers: any[]): BlockTypeSection[];
 
         /**
          * Gets the PacketSpecification objects matching the given BlockTypeSection objects.
@@ -666,7 +867,7 @@ declare module "resol-vbus" {
          * @param  {BlockTypeSection[]} sections Array of BlockTypeSection objects
          * @return {PacketSpecification[]} Array of PacketSpecificationObjects
          */
-        public getBlockTypePacketSpecificationsForSections(sections): PacketSpecification[];
+        public getBlockTypePacketSpecificationsForSections(sections: BlockTypeSection[]): PacketSpecification[];
 
         /**
          * Gets an array of PacketField objects for the provided BlockTypeSection objects.
@@ -674,16 +875,16 @@ declare module "resol-vbus" {
          * @param  {BlockTypeSection[]} sections Array of BlockTypeSection objects.
          * @return {PacketField[]} Array of PacketField objects
          */
-        public getBlockTypeFieldsForSections(sections): PacketField[];
+        public getBlockTypeFieldsForSections(sections: BlockTypeSection[]): PacketField[];
 
-        public static loadSpecificationData(rawSpecificationData, options): any;
-        public static storeSpecificationData(options): any;
+        public static loadSpecificationData(rawSpecificationData: any, options: any): any;
+        public static storeSpecificationData(options: any): any;
         public static getDefaultSpecification(): Specification;
     }
 
     export class Connection extends Duplex {
         public dataSource: any;
-        public channel: number;
+        public channel: string | number;
         public selfAddress: number;
         public connectionState: any;
         public rxBuffer: Buffer;
@@ -759,7 +960,7 @@ declare module "resol-vbus" {
          * @returns {Promise} A Promise that either resolves to the VBus data selected by one of the filter callbacks
          * or `null` on timeout.
          */
-        public async transceive(txData: Buffer, options): Promise<Buffer | null>;
+        public transceive(txData: Buffer, options: any): Promise<Buffer | null>;
 
         /**
          * Waits for a VBus bus offering datagram (Command 0x0500).
@@ -779,7 +980,7 @@ declare module "resol-vbus" {
          * @param {number} options.tries=2 Number of tries to give the bus ownership back.
          * @param {number} options.timeout=1500 Time in milliseconds to wait between tries.
          */
-        public releaseBus(address: number, options): Promise<Buffer>;
+        public releaseBus(address: number, options: any): Promise<Buffer>;
 
         /**
          * Sends a Datagram to get a value from a device.
@@ -793,7 +994,7 @@ declare module "resol-vbus" {
          * @param {number} options.tries=3 Number of tries to get the value.
          * @returns {Promise} A promise that resolves to the received Datagram or `null` on timeout.
          */
-        public getValueById(address: number, valueId: number, options): Promise<Buffer>;
+        public getValueById(address: number, valueId: number, options: any): Promise<Buffer>;
 
         /**
          * Sends a Datagram to set a value in a device.
@@ -808,7 +1009,7 @@ declare module "resol-vbus" {
          * @param {number} options.tries=3 Number of tries to get the value.
          * @returns {Promise} A promise that resolves to the received Datagram or `null` on timeout.
          */
-        public setValueById(address: number, valueId: number, value: number, options): Promise<Buffer>;
+        public setValueById(address: number, valueId: number, value: number, options: any): Promise<Buffer>;
 
         /**
          * Sends a Datagram to lookup a value ID hash in a device.
@@ -822,7 +1023,7 @@ declare module "resol-vbus" {
          * @param  {number} options.tries=3 Number of tries to lookup the value.
          * @return {Promise} A Promise the resolves to the received Datagram or `null` on timeout.
          */
-        public getValueIdHashById(address: number, valueId: number, options): Promise<Buffer>;
+        public getValueIdHashById(address: number, valueId: number, options: any): Promise<Buffer>;
 
         /**
          * Sends a Datagram to lookup a value ID in a device.
@@ -836,7 +1037,7 @@ declare module "resol-vbus" {
          * @param  {number} options.tries=3 Number of tries to lookup the value.
          * @return {Promise} A Promise the resolves to the received Datagram or `null` on timeout.
          */
-        public getValueIdByIdHash(address: number, valueIdHash: number, options): Promise<Buffer>;
+        public getValueIdByIdHash(address: number, valueIdHash: number, options: any): Promise<Buffer>;
 
         /**
          * Sends a Datagram to lookup the controller's capabilities (part 1).
@@ -849,7 +1050,7 @@ declare module "resol-vbus" {
          * @param  {number} options.tries=3 Number of tries to lookup the value.
          * @return {Promise} A Promise the resolves to the received Datagram or `null` on timeout.
          */
-        public getCaps1(address: number, options): Promise<Buffer>;
+        public getCaps1(address: number, options: any): Promise<Buffer>;
 
         /**
          * Sends a Datagram to begin a bulk valke transaction.
@@ -863,7 +1064,7 @@ declare module "resol-vbus" {
          * @param  {number} options.tries=3 Number of tries to lookup the value.
          * @return {Promise} A Promise the resolves to the received Datagram or `null` on timeout.
          */
-        public beginBulkValueTransaction(address: number, txTimeout: number, options): Promise<Buffer>;
+        public beginBulkValueTransaction(address: number, txTimeout: number, options: any): Promise<Buffer>;
 
         /**
          * Sends a Datagram to commit a bulk valke transaction.
@@ -876,7 +1077,7 @@ declare module "resol-vbus" {
          * @param  {number} options.tries=3 Number of tries to lookup the value.
          * @return {Promise} A Promise the resolves to the received Datagram or `null` on timeout.
          */
-        public commitBulkValueTransaction(address: number, options): Promise<Buffer>;
+        public commitBulkValueTransaction(address: number, options: any): Promise<Buffer>;
 
         /**
          * Sends a Datagram to rollback a bulk valke transaction.
@@ -889,7 +1090,7 @@ declare module "resol-vbus" {
          * @param  {number} options.tries=3 Number of tries to lookup the value.
          * @return {Promise} A Promise the resolves to the received Datagram or `null` on timeout.
          */
-        public rollbackBulkValueTransaction(address: number, options): Promise<void>;
+        public rollbackBulkValueTransaction(address: number, options: any): Promise<void>;
 
         /**
          * Sends a Datagram to set a value during a bulk value transaction.
@@ -904,11 +1105,11 @@ declare module "resol-vbus" {
          * @param  {number} options.tries=3 Number of tries to lookup the value.
          * @return {Promise} A Promise the resolves to the received Datagram or `null` on timeout.
          */
-        public setBulkValueById(address, valueId, value, options): Promise<Buffer>;
+        public setBulkValueById(address: number, valueId: number, value: number, options: any): Promise<Buffer>;
 
-        public ping(address: number, valueId: number, value: number, options): Promise<Buffer>;
+        public ping(address: number, valueId: number, value: number, options: any): Promise<Buffer>;
 
-        public getStorageActivity(address: number, options): Promise<any>;
+        public getStorageActivity(address: number, options: any): Promise<any>;
 
         /**
          * Creates a promise that resolves when this Connection
@@ -962,7 +1163,7 @@ declare module "resol-vbus" {
             rawVBusDataOnly?: boolean;
         });
 
-        public connect(force?: boolean): void;
+        public connect(force?: boolean): Promise<void>;
 
         public disconnect(): void;
     }
