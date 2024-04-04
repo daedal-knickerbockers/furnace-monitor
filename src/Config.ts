@@ -12,12 +12,12 @@ export interface ResolSensorConfig {
     password: string;
 }
 
-export interface LocalDatabaseConfig {
-    filePath: string;
-}
-
 export interface DatabaseConfig {
-    localDatabase: LocalDatabaseConfig;
+    path: string;
+    fileExport: {
+        exportDirectory: string;
+        interval: "DAILY" | "WEEKLY" | "MONTHLY" | "HOURLY";
+    };
 }
 
 export interface Config {
@@ -45,9 +45,11 @@ const ResolSensorConfigSchema: JTDSchemaType<ResolSensorConfig> = {
 
 const DatabaseConfigSchema: JTDSchemaType<DatabaseConfig> = {
     properties: {
-        localDatabase: {
+        path: { type: "string" },
+        fileExport: {
             properties: {
-                filePath: { type: "string" },
+                exportDirectory: { type: "string" },
+                interval: { enum: ["DAILY", "WEEKLY", "MONTHLY", "HOURLY"] },
             },
         },
     },

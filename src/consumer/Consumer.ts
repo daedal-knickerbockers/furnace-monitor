@@ -1,27 +1,11 @@
 import { ConsumerConfig } from "../Config";
-import { Gpio, PinState } from "../Gpio";
+import { Gpio, PinState } from "../lib/Gpio";
 import { ConsumerRepository } from "./ConsumerRepository";
 
 export interface ConsumerState {
     consumerName: string;
     stateChangeDate: Date;
     state: PinState;
-}
-
-export interface ConsumerRuntime {
-    consumerName: string;
-    startedDate: Date;
-    stoppedDate: Date;
-    durationSeconds: number;
-}
-
-export type AggregationInterval = "hourly" | "daily" | "weekly" | "monthly" | "yearly";
-
-export interface ConsumerRuntimeAggregate {
-    consumerName: string;
-    startedDate: Date;
-    durationSeconds: number;
-    interval: AggregationInterval;
 }
 
 export class Consumer {
@@ -54,19 +38,5 @@ export class Consumer {
             return;
         }
         await this.repository.createConsumerState(consumerState);
-
-        if (state === PinState.LOW) {
-            if (previousState && previousState.state === PinState.HIGH) {
-                const startedDate = previousState.stateChangeDate;
-                const durationSeconds = Math.round((stateChangeDate.getTime() - startedDate.getTime()) / 1000);
-                const consumerRuntime: ConsumerRuntime = {
-                    consumerName: this.name,
-                    startedDate,
-                    stoppedDate: stateChangeDate,
-                    durationSeconds,
-                };
-                await this.repository.createConsumerRuntime(consumerRuntime);
-            }
-        }
     }
 }

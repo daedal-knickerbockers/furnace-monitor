@@ -1,14 +1,16 @@
 import log from "loglevel";
-import { Args } from "./Args";
 import { Config, ConfigLoader } from "./Config";
-import { Gpio } from "./Gpio";
 import { Consumer } from "./consumer/Consumer";
 import { ConsumerRepository } from "./consumer/ConsumerRepository";
-import { RuntimeAggregator } from "./consumer/RuntimeAggregator";
+import { Database } from "./database/Database";
+import { DatabaseFileExporter } from "./database/DatabaseFileExporter";
+import { Args } from "./lib/Args";
+import { Gpio } from "./lib/Gpio";
 import { ResolSensor } from "./resol-sensor/ResolSensor";
+import { ResolSensorRepository } from "./resol-sensor/ResolSensorRepository";
 
 let shouldRun = true;
-let runtimeAggregator: RuntimeAggregator | undefined;
+let databaseFileExporter: DatabaseFileExporter;
 
 async function main(): Promise<void> {
     process.once("SIGINT", () => {
@@ -20,17 +22,24 @@ async function main(): Promise<void> {
     const configFilePath = args.get("--config") as string;
     const config = ConfigLoader.fromFile(configFilePath);
     const gpio = new Gpio(config.gpioBasePath);
+    const database = new Database(config.database);
 
     log.setLevel(config.logLevel || "info");
 
-    const consumerRepository = new ConsumerRepository(config.database.localDatabase);
+    await database.init();
+
+    const consumerRepository = new ConsumerRepository(database);
     await consumerRepository.init();
 
-    runtimeAggregator = new RuntimeAggregator(consumerRepository);
+    const resolSensorRepository = new ResolSensorRepository(database);
+    await resolSensorRepository.init();
+
+    databaseFileExporter = new DatabaseFileExporter(config.database, consumerRepository, resolSensorRepository);
+    await databaseFileExporter.init();
 
     await initializeConsumers(config, consumerRepository, gpio);
 
-    await initializeResolSensors(config);
+    await initializeResolSensors(config, resolSensorRepository);
 
     while (shouldRun) {
         await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -45,18 +54,17 @@ async function initializeConsumers(
     for (const [consumerName, consumerConfig] of Object.entries(config.consumers)) {
         const consumer = new Consumer(consumerName, consumerConfig, consumerRepository, gpio);
         await consumer.init();
-        runtimeAggregator!.registerConsumer(consumerName);
         log.info(`Registered consumer: ${consumerName}`);
     }
 }
 
-async function initializeResolSensors(config: Readonly<Config>): Promise<void> {
+async function initializeResolSensors(config: Readonly<Config>, repository: ResolSensorRepository): Promise<void> {
     if (!config.resolSensors) {
         return;
     }
 
     for (const [resolSensorName, resolSensorConfig] of Object.entries(config.resolSensors)) {
-        const resolSensor = new ResolSensor(resolSensorConfig);
+        const resolSensor = new ResolSensor(resolSensorConfig, repository);
         await resolSensor.init();
         log.info(`Registered resol sensor: ${resolSensorName}`);
     }
@@ -71,6 +79,6 @@ main()
         log.error(error);
         process.exit(1);
     })
-    .finally(() => {
-        runtimeAggregator?.destroy();
+    .finally(async () => {
+        await databaseFileExporter.destroy();
     });

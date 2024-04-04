@@ -1,7 +1,7 @@
 import fs from "fs";
 import log from "loglevel";
 import path from "path";
-import { Args } from "../src/Args";
+import { Args } from "../src/lib/Args";
 import { ConfigLoader } from "../src/Config";
 
 let shouldRun = true;
@@ -57,7 +57,7 @@ async function simulateGpio(): Promise<void> {
         log.info(`Simulated GPIO pin ${pin} with value ${value}`);
 
         if (shouldRun) {
-            const timeoutMillis = Math.random() * 1000 * 60 * 5; // Max 5 minutes
+            const timeoutMillis = Math.random() * 1000 * 30;
             setTimeout(() => {
                 simulateGpio().catch((error) => reject(error));
             }, timeoutMillis);

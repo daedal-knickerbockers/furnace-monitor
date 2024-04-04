@@ -21,6 +21,10 @@ module.exports = {
                 ignoreTemplateLiterals: true,
             },
         ],
+        "@typescript-eslint/require-await": ["warn"],
+        "@typescript-eslint/no-misused-promises": ["warn"],
+        "@typescript-eslint/no-explicit-any": ["warn"],
+        "@typescript-eslint/no-unsafe-member-access": ["warn"],
     },
     plugins: ["@typescript-eslint", "prefer-arrow"],
 };

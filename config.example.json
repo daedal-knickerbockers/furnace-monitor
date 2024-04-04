@@ -11,8 +11,10 @@
         }
     },
     "database": {
-        "localDatabase": {
-            "filePath": "/var/lib/furnace-monitor/database.sqlite"
+        "path": "/var/lib/furnace-monitor/database.sqlite",
+        "fileExport": {
+            "exportDirectory": "/var/lib/furnace-monitor/export",
+            "interval": "DAILY"
         }
     },
     "resolSensors": {
