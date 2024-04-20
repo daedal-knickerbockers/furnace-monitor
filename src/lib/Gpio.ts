@@ -23,28 +23,39 @@ export interface Watcher {
 }
 
 export class WriteFileError extends Error {
-    public constructor(public readonly filePath: string, error: Error) {
+    public constructor(
+        public readonly filePath: string,
+        error: Error,
+    ) {
         super(`Failed to write to file ${filePath}: ${error.message}`);
     }
 }
 
 export class ReadFileError extends Error {
-    public constructor(public readonly filePath: string, error: Error) {
+    public constructor(
+        public readonly filePath: string,
+        error: Error,
+    ) {
         super(`Failed to read from file ${filePath}: ${error.message}`);
     }
 }
 
 export class OpenFileError extends Error {
-    public constructor(public readonly filePath: string, error: Error) {
+    public constructor(
+        public readonly filePath: string,
+        error: Error,
+    ) {
         super(`Failed to open file ${filePath}: ${error.message}`);
     }
 }
+
+const GPIO_PATH = path.join("/var", "gpio");
 
 export class Gpio {
     private readonly watchers: Watcher[] = [];
     private readonly watchedPins: { [gpio: number]: fs.FSWatcher } = {};
 
-    public constructor(private readonly basepath: string = "/sys/class/gpio") {
+    public constructor() {
         //
     }
 
@@ -141,7 +152,7 @@ export class Gpio {
     }
 
     private buildPath(filePath: string): string {
-        return path.join(this.basepath, filePath);
+        return path.join(GPIO_PATH, filePath);
     }
 
     private async openFile(filePath: string, mode: OpenFileMode): Promise<fs.promises.FileHandle> {

@@ -1,0 +1,10 @@
+version: "2.3"
+services:
+  furnace-monitor:
+    container_name: "furnace-monitor"
+    image: "furnace-monitor:latest"
+    volumes:
+      - ./:/var/config:ro
+      - ./data:/var/data:rw
+      - ./gpio:/var/gpio:rw
+    restart: "always"

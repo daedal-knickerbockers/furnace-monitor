@@ -1,7 +1,5 @@
 {
     "logLevel": "info",
-    "localConfigDirPath": "/var/lib/furnace-monitor",
-    "gpioBasePath": "/sys/class/gpio",
     "consumers": {
         "Furnace": {
             "gpio": 1
@@ -10,12 +8,8 @@
             "gpio": 2
         }
     },
-    "database": {
-        "path": "/var/lib/furnace-monitor/database.sqlite",
-        "fileExport": {
-            "exportDirectory": "/var/lib/furnace-monitor/export",
-            "interval": "DAILY"
-        }
+    "fileExport": {
+        "interval": "DAILY"
     },
     "resolSensors": {
         "myCoolSensor": {

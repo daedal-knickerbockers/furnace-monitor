@@ -2,6 +2,7 @@ import { ErrorObject } from "ajv";
 import Ajv, { JTDSchemaType } from "ajv/dist/jtd";
 import fs from "fs";
 import { LogLevelNames } from "loglevel";
+import path from "path";
 
 export interface ConsumerConfig {
     gpio: number;
@@ -12,22 +13,16 @@ export interface ResolSensorConfig {
     password: string;
 }
 
-export interface DatabaseConfig {
-    path: string;
-    fileExport: {
-        exportDirectory: string;
-        interval: "DAILY" | "WEEKLY" | "MONTHLY" | "HOURLY";
-    };
+export interface FileExportConfig {
+    interval: "DAILY" | "WEEKLY" | "MONTHLY" | "HOURLY";
 }
 
 export interface Config {
     /** Defaults to "info" */
     logLevel?: LogLevelNames;
-    localConfigDirPath: string;
-    gpioBasePath?: string;
     consumers: Record<string, ConsumerConfig>;
     resolSensors?: Record<string, ResolSensorConfig>;
-    database: DatabaseConfig;
+    fileExport: FileExportConfig;
 }
 
 const ConsumerConfigSchema: JTDSchemaType<ConsumerConfig> = {
@@ -43,29 +38,21 @@ const ResolSensorConfigSchema: JTDSchemaType<ResolSensorConfig> = {
     },
 };
 
-const DatabaseConfigSchema: JTDSchemaType<DatabaseConfig> = {
+const FileExportConfigSchema: JTDSchemaType<FileExportConfig> = {
     properties: {
-        path: { type: "string" },
-        fileExport: {
-            properties: {
-                exportDirectory: { type: "string" },
-                interval: { enum: ["DAILY", "WEEKLY", "MONTHLY", "HOURLY"] },
-            },
-        },
+        interval: { enum: ["DAILY", "WEEKLY", "MONTHLY", "HOURLY"] },
     },
 };
 
 const ConfigSchema: JTDSchemaType<Config> = {
     properties: {
-        localConfigDirPath: { type: "string" },
         consumers: {
             values: ConsumerConfigSchema,
         },
-        database: DatabaseConfigSchema,
+        fileExport: FileExportConfigSchema,
     },
     optionalProperties: {
         logLevel: { enum: ["trace", "debug", "info", "warn", "error"] },
-        gpioBasePath: { type: "string" },
         resolSensors: {
             values: ResolSensorConfigSchema,
         },
@@ -83,6 +70,8 @@ export class InvalidConfigError extends Error {
     }
 }
 
+const CONFIG_FILE_PATH = path.join("/var", "config", "config.json");
+
 export class ConfigLoader {
     public static fromFile(filePath: string): Readonly<Config> {
         const file = fs.readFileSync(filePath, "utf-8");
@@ -92,5 +81,9 @@ export class ConfigLoader {
             throw new InvalidConfigError(validationErrors);
         }
         return Object.freeze(parsedContent);
+    }
+
+    public static get(): Readonly<Config> {
+        return this.fromFile(CONFIG_FILE_PATH);
     }
 }

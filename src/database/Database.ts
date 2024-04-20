@@ -1,11 +1,13 @@
 import { Database as DB } from "sqlite";
 import sqlite3 from "sqlite3";
-import { DatabaseConfig } from "../Config";
+import path from "path";
+
+const DATABASE_PATH = path.join("/var", "data", "database.sqlite");
 
 export class Database extends DB {
-    public constructor(config: DatabaseConfig) {
+    public constructor() {
         super({
-            filename: config.path,
+            filename: DATABASE_PATH,
             driver: sqlite3.Database,
         });
     }

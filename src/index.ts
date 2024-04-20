@@ -4,7 +4,6 @@ import { Consumer } from "./consumer/Consumer";
 import { ConsumerRepository } from "./consumer/ConsumerRepository";
 import { Database } from "./database/Database";
 import { DatabaseFileExporter } from "./database/DatabaseFileExporter";
-import { Args } from "./lib/Args";
 import { Gpio } from "./lib/Gpio";
 import { ResolSensor } from "./resol-sensor/ResolSensor";
 import { ResolSensorRepository } from "./resol-sensor/ResolSensorRepository";
@@ -18,11 +17,9 @@ async function main(): Promise<void> {
         shouldRun = false;
     });
 
-    const args = new Args(process.argv.slice(2));
-    const configFilePath = args.get("--config") as string;
-    const config = ConfigLoader.fromFile(configFilePath);
-    const gpio = new Gpio(config.gpioBasePath);
-    const database = new Database(config.database);
+    const config = ConfigLoader.get();
+    const gpio = new Gpio();
+    const database = new Database();
 
     log.setLevel(config.logLevel || "info");
 
@@ -34,7 +31,7 @@ async function main(): Promise<void> {
     const resolSensorRepository = new ResolSensorRepository(database);
     await resolSensorRepository.init();
 
-    databaseFileExporter = new DatabaseFileExporter(config.database, consumerRepository, resolSensorRepository);
+    databaseFileExporter = new DatabaseFileExporter(config.fileExport, consumerRepository, resolSensorRepository);
     await databaseFileExporter.init();
 
     await initializeConsumers(config, consumerRepository, gpio);

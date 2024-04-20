@@ -5,7 +5,7 @@ interface AsyncInterval {
 const asyncIntervals: AsyncInterval[] = [];
 
 const runAsyncInterval = (handler: () => Promise<unknown>, intervalMillis: number, intervalIndex: number) => {
-    handler().finally(() => {
+    void handler().finally(() => {
         if (asyncIntervals[intervalIndex]) {
             const timeoutHandle = setTimeout(
                 () => runAsyncInterval(handler, intervalMillis, intervalIndex),

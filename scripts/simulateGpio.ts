@@ -1,35 +1,33 @@
 import fs from "fs";
 import log from "loglevel";
 import path from "path";
-import { Args } from "../src/lib/Args";
 import { ConfigLoader } from "../src/Config";
 
 let shouldRun = true;
-
-const args = new Args(process.argv.slice(2));
-const configFilePath = args.get("--config") as string;
-const config = ConfigLoader.fromFile(configFilePath);
-log.setLevel(config.logLevel || "info");
-const basePath = config.gpioBasePath ?? path.join(__dirname, "..", "gpio");
+log.setLevel("debug");
 
 process.once("SIGINT", () => {
     console.log("Received SIGINT, exiting...");
     shouldRun = false;
 });
 
+const GPIO_PATH = path.join(__dirname, "..", "gpio");
+const CONFIG_FILE_PATH = path.join(__dirname, "..", "config.json");
+const config = ConfigLoader.fromFile(CONFIG_FILE_PATH);
+
 function setupGpio(): void {
-    const exportFilePath = path.join(basePath, "export");
+    const exportFilePath = path.join(GPIO_PATH, "export");
     if (!fs.existsSync(exportFilePath)) {
         fs.writeFileSync(exportFilePath, "");
     }
-    const unexportFilePath = path.join(basePath, "unexport");
+    const unexportFilePath = path.join(GPIO_PATH, "unexport");
     if (!fs.existsSync(unexportFilePath)) {
         fs.writeFileSync(unexportFilePath, "");
     }
 
     for (const consumer of Object.values(config.consumers)) {
         const pin = consumer.gpio;
-        const pinPath = path.join(basePath, `gpio${pin}`);
+        const pinPath = path.join(GPIO_PATH, `gpio${pin}`);
         if (!fs.existsSync(pinPath)) {
             fs.mkdirSync(pinPath);
         }
@@ -51,7 +49,7 @@ async function simulateGpio(): Promise<void> {
         const consumerId = Object.keys(config.consumers)[consumerIdIndex];
         const consumer = config.consumers[consumerId];
         const pin = consumer.gpio;
-        const pinPath = path.join(basePath, `gpio${pin}`);
+        const pinPath = path.join(GPIO_PATH, `gpio${pin}`);
         const value = Math.random() > 0.5 ? "1" : "0";
         fs.writeFileSync(path.join(pinPath, "value"), value);
         log.info(`Simulated GPIO pin ${pin} with value ${value}`);

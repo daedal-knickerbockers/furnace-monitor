@@ -1,10 +1,12 @@
 import fs from "fs/promises";
 import path from "path";
-import { DatabaseConfig } from "../Config";
+import { FileExportConfig } from "../Config";
 import { ConsumerRepository } from "../consumer/ConsumerRepository";
 import { clearAsyncInterval, setAsyncInterval } from "../lib/asyncInterval";
 import { ResolSensorRepository } from "../resol-sensor/ResolSensorRepository";
 import log from "loglevel";
+
+const FILE_EXPORT_PATH = path.join("/var", "data", "exports");
 
 export type FileExporterStatus = {
     lastExportISO: string;
@@ -15,18 +17,18 @@ export class DatabaseFileExporter {
     private readonly statusFilePath: string;
 
     public constructor(
-        private readonly config: DatabaseConfig,
+        private readonly config: FileExportConfig,
         private readonly consumerRepository: ConsumerRepository,
         private readonly resolSensorRepository: ResolSensorRepository,
     ) {
-        this.statusFilePath = path.join(config.fileExport.exportDirectory, ".status");
+        this.statusFilePath = path.join(FILE_EXPORT_PATH, ".status");
     }
 
     public async init(): Promise<void> {
         this.exportIntervalIndex = setAsyncInterval(async () => {
             await this.exportFiles();
         }, 60_000);
-        await fs.mkdir(this.config.fileExport.exportDirectory, { recursive: true });
+        await fs.mkdir(FILE_EXPORT_PATH, { recursive: true });
     }
 
     public async destroy(): Promise<void> {
@@ -80,7 +82,7 @@ export class DatabaseFileExporter {
         }
 
         let nextDateMillis = new Date(startDateISO).valueOf();
-        switch (this.config.fileExport.interval) {
+        switch (this.config.interval) {
             case "HOURLY":
                 nextDateMillis += 60 * 60 * 1000;
                 break;
@@ -120,13 +122,12 @@ export class DatabaseFileExporter {
                 })
                 .join("\n");
             const exportPath = path.join(
-                this.config.fileExport.exportDirectory,
-                `consumer_states_${fromDate.toISOString()}_${this.config.fileExport.interval}.csv`,
+                FILE_EXPORT_PATH,
+                `consumer_states_${fromDate.toISOString()}_${this.config.interval}.csv`,
             );
             await fs.writeFile(exportPath, csv, "utf8");
-
-            return this.exportConsumerStates(nextEndDate, toDate);
         }
+        return this.exportConsumerStates(nextEndDate, toDate);
     }
 
     private async exportResolSensorValues(fromDate: Date = new Date(0), toDate: Date): Promise<void> {
@@ -144,12 +145,11 @@ export class DatabaseFileExporter {
                 })
                 .join("\n");
             const exportPath = path.join(
-                this.config.fileExport.exportDirectory,
-                `resol_sensor_values_${fromDate.toISOString()}_${this.config.fileExport.interval}.csv`,
+                FILE_EXPORT_PATH,
+                `resol_sensor_values_${fromDate.toISOString()}_${this.config.interval}.csv`,
             );
             await fs.writeFile(exportPath, csv, "utf8");
-
-            return this.exportResolSensorValues(nextEndDate, toDate);
         }
+        return this.exportResolSensorValues(nextEndDate, toDate);
     }
 }
