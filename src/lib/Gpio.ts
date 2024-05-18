@@ -2,6 +2,14 @@ import fs from "fs";
 import log from "loglevel";
 import path from "path";
 
+function getBasePath(): string {
+    if (process.env.GPIO_BASE_PATH) {
+        return process.env.GPIO_BASE_PATH;
+    } else {
+        return path.join("/app", "sys", "class");
+    }
+}
+
 export const Direction = {
     INPUT: Buffer.from("Input"),
     OUTPUT: Buffer.from("Output"),
@@ -50,7 +58,7 @@ export class OpenFileError extends Error {
     }
 }
 
-const GPIO_PATH = path.join("/app", "sys", "class", "gpio");
+const GPIO_PATH = path.join(getBasePath(), "gpio");
 
 export class Gpio {
     private readonly watchers: Watcher[] = [];

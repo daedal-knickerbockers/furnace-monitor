@@ -4,6 +4,14 @@ import fs from "fs";
 import { LogLevelNames } from "loglevel";
 import path from "path";
 
+function getBasePath(): string {
+    if (process.env.CONFIG_BASE_PATH) {
+        return process.env.CONFIG_BASE_PATH;
+    } else {
+        return path.join("/app", "config");
+    }
+}
+
 export interface ConsumerConfig {
     gpio: number;
 }
@@ -70,7 +78,7 @@ export class InvalidConfigError extends Error {
     }
 }
 
-const CONFIG_FILE_PATH = path.join("/app", "config", "config.json");
+const CONFIG_FILE_PATH = path.join(getBasePath(), "config.json");
 
 export class ConfigLoader {
     public static fromFile(filePath: string): Readonly<Config> {

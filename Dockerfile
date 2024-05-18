@@ -44,7 +44,7 @@ WORKDIR /app/dist
 CMD [ "node", "index.js" ]
 
 # Volume that holds the database and file exports
-VOLUME [ "/app/data"]   
+VOLUME [ "/app/data"]
 
 # Volume that holds the configuration files
 VOLUME [ "/app/config"]

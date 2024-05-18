@@ -10,7 +10,7 @@
     "author": "Daniel Kneip",
     "scripts": {
         "simulateGpio": "ts-node scripts/simulateGpio.ts --config ./config.json",
-        "start": "ts-node src/index.ts --config ./config.json",
+        "start": "ts-node -r dotenv/config src/index.ts",
         "build": "rimraf dist && tsc -p tsconfig.build.json",
         "build:docker": "docker build -t danielkneip/furnace-monitor ."
     },
@@ -31,6 +31,7 @@
         "eslint-plugin-prefer-arrow": "^1.2.3",
         "prettier": "^3.2.5",
         "ts-node": "^10.9.2",
-        "rimraf": "^5.0.5"
+        "rimraf": "^5.0.5",
+        "dotenv": "^16.4.5"
     }
 }
