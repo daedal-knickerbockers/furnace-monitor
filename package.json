@@ -12,7 +12,7 @@
         "simulateGpio": "ts-node scripts/simulateGpio.ts --config ./config.json",
         "start": "ts-node src/index.ts --config ./config.json",
         "build": "rimraf dist && tsc -p tsconfig.build.json",
-        "build:docker": "docker build -t furnace-monitor ."
+        "build:docker": "docker build -t danielkneip/furnace-monitor ."
     },
     "dependencies": {
         "ajv": "^8.12.0",

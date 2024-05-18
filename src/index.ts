@@ -10,6 +10,7 @@ import { ResolSensorRepository } from "./resol-sensor/ResolSensorRepository";
 
 let shouldRun = true;
 let databaseFileExporter: DatabaseFileExporter;
+let gpio: Gpio;
 
 async function main(): Promise<void> {
     process.once("SIGINT", () => {
@@ -18,7 +19,7 @@ async function main(): Promise<void> {
     });
 
     const config = ConfigLoader.get();
-    const gpio = new Gpio();
+    gpio = new Gpio();
     const database = new Database();
 
     log.setLevel(config.logLevel || "info");
@@ -77,5 +78,6 @@ main()
         process.exit(1);
     })
     .finally(async () => {
+        gpio.stopWatchingAll();
         await databaseFileExporter.destroy();
     });

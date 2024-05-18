@@ -6,7 +6,7 @@ import { clearAsyncInterval, setAsyncInterval } from "../lib/asyncInterval";
 import { ResolSensorRepository } from "../resol-sensor/ResolSensorRepository";
 import log from "loglevel";
 
-const FILE_EXPORT_PATH = path.join("/var", "data", "exports");
+const FILE_EXPORT_PATH = path.join("/app", "data", "exports");
 
 export type FileExporterStatus = {
     lastExportISO: string;

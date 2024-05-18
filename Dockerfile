@@ -44,10 +44,10 @@ WORKDIR /app/dist
 CMD [ "node", "index.js" ]
 
 # Volume that holds the database and file exports
-VOLUME [ "/var/data"]   
+VOLUME [ "/app/data"]   
 
 # Volume that holds the configuration files
-VOLUME [ "/var/config"]
+VOLUME [ "/app/config"]
 
-# Volume that maps to the gpio directories of the raspberry pi
-VOLUME [ "/var/gpio"]
+# Volume that maps to the sys directory of the raspberry pi
+VOLUME [ "/app/sys"]

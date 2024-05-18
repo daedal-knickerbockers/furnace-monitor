@@ -70,7 +70,7 @@ export class InvalidConfigError extends Error {
     }
 }
 
-const CONFIG_FILE_PATH = path.join("/var", "config", "config.json");
+const CONFIG_FILE_PATH = path.join("/app", "config", "config.json");
 
 export class ConfigLoader {
     public static fromFile(filePath: string): Readonly<Config> {

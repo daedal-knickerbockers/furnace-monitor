@@ -1,4 +1,5 @@
 import fs from "fs";
+import log from "loglevel";
 import path from "path";
 
 export const Direction = {
@@ -49,11 +50,11 @@ export class OpenFileError extends Error {
     }
 }
 
-const GPIO_PATH = path.join("/var", "gpio");
+const GPIO_PATH = path.join("/app", "sys", "class", "gpio");
 
 export class Gpio {
     private readonly watchers: Watcher[] = [];
-    private readonly watchedPins: { [gpio: number]: fs.FSWatcher } = {};
+    private readonly watchedPins: Record<number, NodeJS.Timeout> = {};
 
     public constructor() {
         //
@@ -128,27 +129,42 @@ export class Gpio {
     public async watch(gpioNumber: number, handler: (pinState: PinState) => Promise<void>): Promise<void> {
         this.watchers.push({ gpioNumber, handler });
         if (!this.watchedPins[gpioNumber]) {
-            await this.export(gpioNumber);
-            await this.setDirection(gpioNumber, "INPUT");
-            const fileWatcher = this.startWatching(gpioNumber);
+            // FIXME: Does not work from docker to access the export file...
+            //await this.export(gpioNumber);
+            //await this.setDirection(gpioNumber, "INPUT");
+            const fileWatcher = await this.startWatching(gpioNumber);
             this.watchedPins[gpioNumber] = fileWatcher;
         }
     }
 
-    private startWatching(gpioNumber: number): fs.FSWatcher {
+    private async startWatching(gpioNumber: number): Promise<NodeJS.Timeout> {
         const filePath = `gpio${gpioNumber}/value`;
         const watchPath = this.buildPath(filePath);
         // fs.watch works fine with promises :shrug:
         // eslint-disable-next-line @typescript-eslint/no-misused-promises
-        return fs.watch(watchPath, async (eventType) => {
-            if (eventType === "change") {
-                const currentPinState = await this.read(gpioNumber);
-                const watchersToNotify = this.watchers.filter((watcher) => watcher.gpioNumber === gpioNumber);
-                for (const watcher of watchersToNotify) {
-                    await watcher.handler(currentPinState);
-                }
+        log.debug(`Watching ${watchPath}`);
+        let lastState: PinState = await this.read(gpioNumber);
+        // eslint-disable-next-line @typescript-eslint/no-misused-promises
+        return setInterval(async () => {
+            const currentPinState = await this.read(gpioNumber);
+            if (currentPinState === lastState) {
+                return;
             }
-        });
+
+            lastState = currentPinState;
+            log.debug(`State of ${gpioNumber} has changed: ${currentPinState}`);
+            log.debug(`Notifying ${this.watchers.length} watchers`);
+            const watchersToNotify = this.watchers.filter((watcher) => watcher.gpioNumber === gpioNumber);
+            for (const watcher of watchersToNotify) {
+                await watcher.handler(currentPinState);
+            }
+        }, 100);
+    }
+
+    public stopWatchingAll(): void {
+        for (const watcher of Object.values(this.watchedPins)) {
+            clearInterval(watcher);
+        }
     }
 
     private buildPath(filePath: string): string {

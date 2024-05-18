@@ -1,10 +1,10 @@
 version: "2.3"
 services:
-  furnace-monitor:
-    container_name: "furnace-monitor"
-    image: "furnace-monitor:latest"
-    volumes:
-      - ./:/var/config:ro
-      - ./data:/var/data:rw
-      - ./gpio:/var/gpio:rw
-    restart: "always"
+    furnace-monitor:
+        container_name: "furnace-monitor"
+        image: "danielkneip/furnace-monitor:latest"
+        volumes:
+            - ./:/app/config:ro
+            - ./data:/app/data:rw
+            - ./sys:/app/sys:rw
+        restart: "always"

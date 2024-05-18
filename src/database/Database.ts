@@ -2,7 +2,7 @@ import { Database as DB } from "sqlite";
 import sqlite3 from "sqlite3";
 import path from "path";
 
-const DATABASE_PATH = path.join("/var", "data", "database.sqlite");
+const DATABASE_PATH = path.join("/app", "data", "database.sqlite");
 
 export class Database extends DB {
     public constructor() {
