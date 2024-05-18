@@ -1,0 +1,6 @@
+[Unit]
+Description=Record starts and stops of dfferent furnace consumers
+[Service]
+ExecStart=/usr/local/sbin/furnace-monitor.sh
+[Install]
+WantedBy=multi-user.target
