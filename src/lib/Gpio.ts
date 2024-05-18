@@ -166,7 +166,7 @@ export class Gpio {
             for (const watcher of watchersToNotify) {
                 await watcher.handler(currentPinState);
             }
-        }, 100);
+        }, 10);
     }
 
     public stopWatchingAll(): void {
