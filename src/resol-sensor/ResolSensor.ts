@@ -11,10 +11,12 @@ export type ResolSensorValue = {
 
 export class ResolSensor {
     private readonly connection: TcpConnection;
-    private connectPromise: Promise<void> | null = null;
     private readonly specification: Specification;
 
-    public constructor(private readonly config: ResolSensorConfig, private readonly repository: ResolSensorRepository) {
+    public constructor(
+        private readonly config: ResolSensorConfig,
+        private readonly repository: ResolSensorRepository,
+    ) {
         this.connection = new TcpConnection({
             host: this.config.host,
             password: this.config.password,
@@ -24,7 +26,16 @@ export class ResolSensor {
     }
 
     public async init(): Promise<void> {
-        this.connectPromise = this.connection.connect();
+        try {
+            await this.connection.createConnectedPromise();
+        } catch (error) {
+            log.error(`Failed to connect to ${this.config.host}: ${(error as Error).message}`);
+            return;
+        }
+    }
+
+    public async destroy(): Promise<void> {
+        this.connection.disconnect();
     }
 
     public async onPacket(packet: Buffer): Promise<void> {

@@ -53,7 +53,7 @@ export class DatabaseFileExporter {
 
         const promises = [
             this.exportConsumerStates(fromDate, nextExportDate),
-            // this.exportResolSensorValues(fromDate, nextExportDate),
+            this.exportResolSensorValues(fromDate, nextExportDate),
         ];
         const results = await Promise.allSettled(promises);
         if (results.some((result) => result.status === "rejected")) {

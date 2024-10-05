@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-misused-promises */
 import log from "loglevel";
 import { Config, ConfigLoader } from "./Config";
 import { Consumer } from "./consumer/Consumer";
@@ -11,6 +12,8 @@ import { ResolSensorRepository } from "./resol-sensor/ResolSensorRepository";
 let shouldRun = true;
 let databaseFileExporter: DatabaseFileExporter;
 let gpio: Gpio;
+const consumers: Consumer[] = [];
+const resolSensors: ResolSensor[] = [];
 
 async function main(): Promise<void> {
     process.once("SIGINT", () => {
@@ -53,6 +56,7 @@ async function initializeConsumers(
         const consumer = new Consumer(consumerName, consumerConfig, consumerRepository, gpio);
         await consumer.init();
         log.info(`Registered consumer: ${consumerName}`);
+        consumers.push(consumer);
     }
 }
 
@@ -65,6 +69,7 @@ async function initializeResolSensors(config: Readonly<Config>, repository: Reso
         const resolSensor = new ResolSensor(resolSensorConfig, repository);
         await resolSensor.init();
         log.info(`Registered resol sensor: ${resolSensorName}`);
+        resolSensors.push(resolSensor);
     }
 }
 
@@ -79,5 +84,14 @@ main()
     })
     .finally(async () => {
         gpio.stopWatchingAll();
+
+        for (const consumer of consumers) {
+            await consumer.destroy();
+        }
+
+        for (const resolSensor of resolSensors) {
+            await resolSensor.destroy();
+        }
+
         await databaseFileExporter.destroy();
     });
