@@ -53,7 +53,8 @@ export class DatabaseFileExporter {
 
         const promises = [
             this.exportConsumerStates(fromDate, nextExportDate),
-            this.exportResolSensorValues(fromDate, nextExportDate),
+            // TODO: Enable once resol sensor value mapping is implemented
+            // this.exportResolSensorValues(fromDate, nextExportDate),
         ];
         const results = await Promise.allSettled(promises);
         if (results.some((result) => result.status === "rejected")) {
@@ -147,9 +148,9 @@ export class DatabaseFileExporter {
         if (resolSensorValues.length > 0) {
             const csv = resolSensorValues
                 .map((resolSensorValue) => {
-                    return `${resolSensorValue.name},${
-                        resolSensorValue.value
-                    },${resolSensorValue.createdDate.toISOString()}`;
+                    return `${resolSensorValue.name},${Object.values(resolSensorValue.values)
+                        .map((value) => value.toFixed(2))
+                        .join(",")},${resolSensorValue.createdDate.toISOString()}`;
                 })
                 .join("\r\n");
             const exportPath = path.join(
