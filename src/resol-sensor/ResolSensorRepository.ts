@@ -1,9 +1,10 @@
 import { Database } from "../database/Database";
 import { ResolSensorValue } from "./ResolSensor";
 
-export type ResolSensorValueDBO = Omit<ResolSensorValue, "createdDate"> & {
+export type ResolSensorValueDBO = Omit<ResolSensorValue, "createdDate" | "values"> & {
     createdTimestamp: number;
     createdISO: string;
+    values: string;
 };
 
 export class ResolSensorRepository {
@@ -25,14 +26,14 @@ export class ResolSensorRepository {
                 createdISO
             ) VALUES (
                 $name,
-                $value,
+                $values,
                 $createdTimestamp,
                 $createdISO
             );
         `,
             {
                 $name: value.name,
-                $value: value.value,
+                $values: JSON.stringify(value.values),
                 $createdTimestamp: value.createdDate.getTime(),
                 $createdISO: value.createdDate.toISOString(),
             },
@@ -56,7 +57,7 @@ export class ResolSensorRepository {
 
         return resolSensorValuesDBO.map((dbo) => ({
             name: dbo.name,
-            value: dbo.value,
+            values: JSON.parse(dbo.values) as Record<string, number>,
             createdDate: new Date(dbo.createdISO),
         }));
     }
@@ -66,7 +67,7 @@ export class ResolSensorRepository {
             CREATE TABLE IF NOT EXISTS resol_sensor_values (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
-                value REAL NOT NULL,
+                values TEXT NOT NULL,
                 createdTimestamp INTEGER NOT NULL,
                 createdISO TEXT NOT NULL
             );

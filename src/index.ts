@@ -66,7 +66,7 @@ async function initializeResolSensors(config: Readonly<Config>, repository: Reso
     }
 
     for (const [resolSensorName, resolSensorConfig] of Object.entries(config.resolSensors)) {
-        const resolSensor = new ResolSensor(resolSensorConfig, repository);
+        const resolSensor = new ResolSensor(resolSensorName, resolSensorConfig, repository);
         await resolSensor.init();
         log.info(`Registered resol sensor: ${resolSensorName}`);
         resolSensors.push(resolSensor);

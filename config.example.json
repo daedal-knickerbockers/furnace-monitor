@@ -14,7 +14,8 @@
     "resolSensors": {
         "myCoolSensor": {
             "host": "192.168.178.123",
-            "password": "fooBarPassword"
+            "password": "fooBarPassword",
+            "valueCollectionTimeSeconds": 600
         }
     }
 }

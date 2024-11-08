@@ -128,7 +128,7 @@ export class DatabaseFileExporter {
                         consumerState.state
                     }`;
                 })
-                .join("\n");
+                .join("\r\n");
             const exportPath = path.join(
                 FILE_EXPORT_PATH,
                 `consumer_states_${fromDate.toISOString()}_${this.config.interval}.csv`,
@@ -151,7 +151,7 @@ export class DatabaseFileExporter {
                         resolSensorValue.value
                     },${resolSensorValue.createdDate.toISOString()}`;
                 })
-                .join("\n");
+                .join("\r\n");
             const exportPath = path.join(
                 FILE_EXPORT_PATH,
                 `resol_sensor_values_${fromDate.toISOString()}_${this.config.interval}.csv`,

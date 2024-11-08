@@ -19,6 +19,7 @@ export interface ConsumerConfig {
 export interface ResolSensorConfig {
     host: string;
     password: string;
+    valueCollectionTimeSeconds: number;
 }
 
 export interface FileExportConfig {
@@ -43,6 +44,7 @@ const ResolSensorConfigSchema: JTDSchemaType<ResolSensorConfig> = {
     properties: {
         host: { type: "string" },
         password: { type: "string" },
+        valueCollectionTimeSeconds: { type: "uint32" },
     },
 };
 
